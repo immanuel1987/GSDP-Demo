@@ -97,7 +97,7 @@ function HeroSlider() {
     const v = overviewVideoRef.current
     if (v) {
       v.currentTime = 0
-      v.play().catch(() => {})
+      v.play().catch(() => { })
     }
     const onKey = (e) => {
       if (e.key === 'Escape') setOverviewOpen(false)
@@ -472,71 +472,71 @@ export function PublicHomePage() {
           <div className="hp-hero-r">
             {/* Rector card */}
             <div className="hp-rector">
-            <div className="hp-rector-av">FA</div>
-            <div className="hp-rector-info">
-              <div className="role">Rector Major · 11th Successor</div>
-              <h3>Fr. Fabio Attard</h3>
-              <div className="since">Since 25 Mar 2025 · Term 2025–2031</div>
-            </div>
-            <div className="hp-rector-actions">
-              <a>Biography ↗</a>
-              <a>Chapter docs ↗</a>
-            </div>
-          </div>
-
-          {/* Live stack */}
-          <div className="hp-live-stack">
-            <div className="hp-live">
-              <div className="hp-live-h">
-                <span className="hp-live-lbl">Live Knowledge Base</span>
-                <span className="hp-live-upd">Updated today</span>
+              <div className="hp-rector-av">FA</div>
+              <div className="hp-rector-info">
+                <div className="role">Rector Major · 11th Successor</div>
+                <h3>Fr. Fabio Attard</h3>
+                <div className="since">Since 25 Mar 2025 · Term 2025–2031</div>
               </div>
-              <div className="hp-live-grid">
-                {[
-                  { v: '12,847', k: 'Resources', d: '▲ 312 / mo' },
-                  { v: '136', k: 'Nations', d: '+2 since \'24' },
-                  { v: '13,750', k: 'Salesians', d: 'GC29 census' },
-                  { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
-                ].map((c, i) => (
-                  <div key={i} className="hp-live-cell">
-                    <div className="v">{c.v}</div>
-                    <div className="k">{c.k}</div>
-                    <div className="delta">{c.d}</div>
-                  </div>
-                ))}
+              <div className="hp-rector-actions">
+                <a>Biography ↗</a>
+                <a>Chapter docs ↗</a>
               </div>
             </div>
 
-            {/* Trending */}
-            <div className="hp-trend">
-              <div className="hp-trend-h">
-                <span className="hp-trend-t">Trending searches</span>
-                <span className="hp-trend-week">Past 7 days</span>
+            {/* Live stack */}
+            <div className="hp-live-stack">
+              <div className="hp-live">
+                <div className="hp-live-h">
+                  <span className="hp-live-lbl">Live Knowledge Base</span>
+                  <span className="hp-live-upd">Updated today</span>
+                </div>
+                <div className="hp-live-grid">
+                  {[
+                    { v: '12,847', k: 'Resources', d: '▲ 312 / mo' },
+                    { v: '136', k: 'Nations', d: '+2 since \'24' },
+                    { v: '13,750', k: 'Salesians', d: 'GC29 census' },
+                    { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
+                  ].map((c, i) => (
+                    <div key={i} className="hp-live-cell">
+                      <div className="v">{c.v}</div>
+                      <div className="k">{c.k}</div>
+                      <div className="delta">{c.d}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="hp-trend-list">
-                {[
-                  { q: 'Preventive system in education', ct: '+42%', up: true },
-                  { q: 'Strenna 2026 commentary', ct: '+28%', up: true },
-                  { q: 'Youth ministry post-pandemic', ct: '+19%', up: true },
-                  { q: 'Salesian Bulletin · 1877 archive', ct: '→ steady', up: false },
-                ].map((t, i) => (
-                  <div key={i} className="hp-trend-row">
-                    <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
-                    <span className="hp-trend-q">{t.q}</span>
-                    <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
-                      {t.up && (
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path d="m6 15 6-6 6 6" />
-                        </svg>
-                      )}
-                      {t.ct}
-                    </span>
-                  </div>
-                ))}
+
+              {/* Trending */}
+              <div className="hp-trend">
+                <div className="hp-trend-h">
+                  <span className="hp-trend-t">Trending searches</span>
+                  <span className="hp-trend-week">Past 7 days</span>
+                </div>
+                <div className="hp-trend-list">
+                  {[
+                    { q: 'Preventive system in education', ct: '+42%', up: true },
+                    { q: 'Strenna 2026 commentary', ct: '+28%', up: true },
+                    { q: 'Youth ministry post-pandemic', ct: '+19%', up: true },
+                    { q: 'Salesian Bulletin · 1877 archive', ct: '→ steady', up: false },
+                  ].map((t, i) => (
+                    <div key={i} className="hp-trend-row">
+                      <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
+                      <span className="hp-trend-q">{t.q}</span>
+                      <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
+                        {t.up && (
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="m6 15 6-6 6 6" />
+                          </svg>
+                        )}
+                        {t.ct}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </div>
       </section>
 
@@ -552,7 +552,7 @@ export function PublicHomePage() {
             <a className="hp-panel-all" onClick={() => navigate('/login')} style={{ cursor: 'pointer' }}>
               All news →
             </a>
-       
+
           </div>
           <div className="hp-news-list">
             {[
