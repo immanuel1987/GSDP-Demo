@@ -20,7 +20,7 @@ export function MapSection({ onEnterPlatform }) {
           Full directory →
         </button>
       </div>
-      <div className="relative flex h-[280px] flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border border-border-sdb bg-gradient-to-br from-sdb-blue-light to-sdb-blue-pale sm:h-[320px] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_40%_50%,rgba(0,87,168,0.1),transparent_60%),radial-gradient(circle_at_75%_35%,rgba(232,96,10,0.07),transparent_45%)]">
+      <div className="relative flex h-[280px] flex-col items-center justify-center gap-3 overflow-hidden rounded-xl border border-border-sdb bg-gradient-to-br from-sdb-blue-light to-sdb-blue-pale sm:h-[320px] before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_40%_50%,rgba(0,74,153,0.12),transparent_60%),radial-gradient(circle_at_75%_35%,rgba(230,126,34,0.08),transparent_45%)]">
         <div className="relative font-serif text-lg font-bold text-sdb-blue-deep">
           🗺 Interactive World Map · 1,703 communities · 136 nations
         </div>

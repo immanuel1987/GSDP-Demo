@@ -1,6 +1,6 @@
 const council = [
   {
-    cc: '#E8600A',
+    cc: '#E67E22',
     initials: 'FA',
     name: 'Fr. Fabio Attard',
     role: 'Rector Major',
@@ -9,7 +9,7 @@ const council = [
     toast: 'Fr. Fabio Attard — 11th Rector Major, elected GC29 · Malta',
   },
   {
-    cc: '#2272C3',
+    cc: '#1f6eb8',
     initials: 'SM',
     name: 'Fr. Stefano Martoglio',
     role: 'Vicar General',
@@ -77,7 +77,7 @@ export function CouncilSection({ onToast }) {
   return (
     <section
       id="council-pub"
-      className="relative overflow-hidden bg-gradient-to-b from-[#001830] from-0% via-sdb-blue-deep via-40% to-[#002A5A] px-4 py-10 sm:px-8 lg:px-14 lg:py-[52px] before:pointer-events-none before:absolute before:-right-20 before:-top-[120px] before:size-[500px] before:rounded-full before:bg-[radial-gradient(circle,rgba(0,87,168,0.18),transparent_65%)] after:pointer-events-none after:absolute after:-bottom-20 after:left-10 after:size-[320px] after:rounded-full after:bg-[radial-gradient(circle,rgba(232,96,10,0.1),transparent_65%)]"
+      className="relative overflow-hidden bg-gradient-to-b from-[#001830] from-0% via-sdb-blue-deep via-40% to-[#002A5A] px-4 py-10 sm:px-8 lg:px-14 lg:py-[52px] before:pointer-events-none before:absolute before:-right-20 before:-top-[120px] before:size-[500px] before:rounded-full before:bg-[radial-gradient(circle,rgba(0,74,153,0.2),transparent_65%)] after:pointer-events-none after:absolute after:-bottom-20 after:left-10 after:size-[320px] after:rounded-full after:bg-[radial-gradient(circle,rgba(230,126,34,0.12),transparent_65%)]"
     >
       <div className="relative z-[1] mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>

@@ -15,7 +15,7 @@ const langs = ['EN', 'IT', 'ES', 'FR', 'PT']
 /* pt-1 on wrapper bridges the gap so hover isn’t lost between trigger and panel */
 const dropWrap = 'absolute left-0 top-full z-[200] min-w-[220px] pt-1'
 const dropPanel =
-  'rounded-xl border border-border-sdb bg-white py-1.5 pt-1 shadow-[0_8px_32px_rgba(0,57,117,0.12)] transition-opacity duration-150'
+  'rounded-xl border border-border-sdb bg-white py-1.5 pt-1 shadow-[0_8px_32px_rgba(0,74,153,0.12)] transition-opacity duration-150'
 
 function navGo(id, closeAll) {
   closeAll()
@@ -95,7 +95,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-[100]">
-      <div className="flex h-10 items-center gap-5 overflow-x-auto border-b border-white/10 bg-sdb-blue-deep px-4 text-xs text-white/85 sm:px-8 lg:px-14">
+      <div className="flex min-h-10 items-center gap-4 overflow-x-auto border-b border-white/10 bg-sdb-blue-deep px-4 text-sm text-white/85 sm:gap-5 sm:px-8 lg:px-14">
         {topLinks.map(({ label, id }) => (
           <button
             key={label}
@@ -111,7 +111,7 @@ export function Header() {
             <button
               key={code}
               type="button"
-              className="cursor-pointer rounded border border-white/25 px-2.5 py-1 font-sans text-xs text-white/85 transition-colors hover:border-sdb-orange hover:bg-sdb-orange/15 hover:text-white"
+              className="cursor-pointer rounded border border-white/25 px-2.5 py-1.5 font-sans text-sm text-white/85 transition-colors hover:border-sdb-orange hover:bg-sdb-orange/15 hover:text-white sm:text-xs sm:py-1"
             >
               {code}
             </button>
@@ -119,7 +119,7 @@ export function Header() {
         </div>
       </div>
 
-      <nav className="flex h-[68px] items-center gap-0 border-b-[3px] border-sdb-orange bg-white px-4 shadow-[0_2px_12px_rgba(0,57,117,0.08)] sm:px-8 lg:px-14">
+      <nav className="flex min-h-[68px] flex-wrap items-center gap-y-1 border-b-[3px] border-sdb-orange bg-white px-4 py-1 shadow-[0_2px_12px_rgba(0,74,153,0.08)] sm:flex-nowrap sm:px-8 sm:py-0 lg:px-14">
         <Link
           to="/"
           onClick={(e) => {
@@ -133,10 +133,15 @@ export function Header() {
         >
           <SdbGlobeLogo size={36} />
           <div className="hidden min-[380px]:block">
-            <strong className="font-serif text-[13px] leading-tight tracking-wide text-sdb-blue-deep">
-              Global Salesian Digital Platform
-            </strong>
-            <span className="block text-[9px] font-normal uppercase tracking-widest text-mid">
+            <div className="rounded-lg border border-border-sdb bg-gradient-to-b from-white to-sdb-blue-pale/50 px-3 py-1.5 shadow-[0_2px_10px_rgba(0,74,153,0.06)]">
+              <strong className="block font-serif text-[14px] leading-tight text-sdb-blue-deep sm:text-[13px]">
+                Global Salesian
+              </strong>
+              <span className="mt-0.5 block text-[10px] font-normal uppercase tracking-widest text-mid sm:text-[9px]">
+                Digital Platform
+              </span>
+            </div>
+            <span className="mt-1 block text-[10px] font-normal uppercase tracking-widest text-mid sm:text-[9px]">
               Open knowledge · South Asia pilot
             </span>
           </div>
@@ -146,7 +151,7 @@ export function Header() {
         <div className="ml-2 mr-auto flex min-w-0 max-w-[min(100%,calc(100vw-200px))] flex-1 flex-nowrap items-center gap-0 sm:ml-4 xl:ml-10">
           <button
             type="button"
-            className="flex h-[68px] shrink-0 items-center gap-1 border-b-[3px] border-sdb-orange -mb-[3px] px-4 text-sm font-semibold tracking-wide text-sdb-blue-deep"
+            className="flex min-h-[52px] shrink-0 items-center gap-1 border-b-[3px] border-sdb-orange -mb-[3px] px-3 text-[15px] font-semibold tracking-wide text-sdb-blue-deep sm:h-[68px] sm:px-4 sm:text-sm"
             onClick={() => {
               closeAll()
               scrollToSection('hero')
@@ -171,7 +176,7 @@ export function Header() {
               type="button"
               aria-expanded={showDiscover}
               aria-haspopup="true"
-              className={`flex h-[68px] cursor-pointer items-center gap-1 border-b-[3px] -mb-[3px] px-4 text-sm font-semibold tracking-wide transition-colors ${
+              className={`flex min-h-[52px] cursor-pointer items-center gap-1 border-b-[3px] -mb-[3px] px-3 text-[15px] font-semibold tracking-wide transition-colors sm:h-[68px] sm:px-4 sm:text-sm ${
                 showDiscover
                   ? 'border-sdb-orange text-sdb-blue-deep'
                   : 'border-transparent text-slate-sdb hover:border-sdb-blue-light hover:text-sdb-blue'
@@ -232,7 +237,7 @@ export function Header() {
 
           <button
             type="button"
-            className="flex h-[68px] shrink-0 items-center gap-1 border-b-[3px] border-transparent -mb-[3px] px-4 text-sm font-semibold tracking-wide text-slate-sdb transition-colors hover:border-sdb-blue-light hover:text-sdb-blue"
+            className="flex min-h-[52px] shrink-0 items-center gap-1 border-b-[3px] border-transparent -mb-[3px] px-3 text-[15px] font-semibold tracking-wide text-slate-sdb transition-colors hover:border-sdb-blue-light hover:text-sdb-blue sm:h-[68px] sm:px-4 sm:text-sm"
             onClick={() => {
               closeAll()
               scrollToSection('institutions-pub')
@@ -257,7 +262,7 @@ export function Header() {
               type="button"
               aria-expanded={showAbout}
               aria-haspopup="true"
-              className={`flex h-[68px] cursor-pointer items-center gap-1 border-b-[3px] -mb-[3px] px-4 text-sm font-semibold tracking-wide transition-colors ${
+              className={`flex min-h-[52px] cursor-pointer items-center gap-1 border-b-[3px] -mb-[3px] px-3 text-[15px] font-semibold tracking-wide transition-colors sm:h-[68px] sm:px-4 sm:text-sm ${
                 showAbout
                   ? 'border-sdb-orange text-sdb-blue-deep'
                   : 'border-transparent text-slate-sdb hover:border-sdb-blue-light hover:text-sdb-blue'
@@ -334,13 +339,13 @@ export function Header() {
         <div className="ml-auto flex shrink-0 items-center gap-2.5">
           <Link
             to="/login"
-            className="cursor-pointer rounded-lg border border-sdb-blue bg-transparent px-4 py-2 text-center font-sans text-[13px] font-semibold text-sdb-blue no-underline transition-colors hover:bg-sdb-blue-pale max-sm:px-3 max-sm:text-xs"
+            className="cursor-pointer rounded-lg border border-sdb-blue bg-transparent px-4 py-2.5 text-center font-sans text-sm font-semibold text-sdb-blue no-underline transition-colors hover:bg-sdb-blue-pale sm:py-2 sm:text-[13px]"
           >
             Sign In
           </Link>
           <Link
             to="/login"
-            className="cursor-pointer rounded-lg border-none bg-sdb-orange px-4 py-2 text-center font-sans text-[13px] font-semibold text-white no-underline transition-[filter] hover:brightness-110 max-sm:px-3 max-sm:text-xs"
+            className="cursor-pointer rounded-lg border-none bg-sdb-orange px-4 py-2.5 text-center font-sans text-sm font-semibold text-white no-underline transition-[filter] hover:brightness-110 sm:py-2 sm:text-[13px]"
           >
             Enter Platform →
           </Link>

@@ -7,7 +7,7 @@ const collections = [
     count: '47 resources',
   },
   {
-    grad: 'bg-gradient-to-br from-[#002240] via-[#003A75] to-[#0057A8]',
+    grad: 'bg-gradient-to-br from-[#002240] via-[#003559] to-[#004A99]',
     chip: 'Thematic Archive',
     title: 'Salesian Bulletin — Century Archive',
     desc: 'Complete digital archive of the Salesian Bulletin from 1877 — the oldest continuously published Catholic periodical.',
@@ -68,7 +68,7 @@ export function CollectionsSection({ onEnterPlatform }) {
             key={c.title}
             type="button"
             onClick={onEnterPlatform}
-            className="cursor-pointer rounded-xl border border-border-sdb bg-white text-left transition-all hover:-translate-y-0.5 hover:border-sdb-blue-light hover:shadow-[0_8px_32px_rgba(0,57,117,0.12)]"
+            className="cursor-pointer rounded-xl border border-border-sdb bg-white text-left transition-all hover:-translate-y-0.5 hover:border-sdb-blue-light hover:shadow-[0_8px_32px_rgba(0,74,153,0.12)]"
           >
             <div
               className={`flex h-[110px] items-end bg-cover p-3.5 ${c.grad}`}

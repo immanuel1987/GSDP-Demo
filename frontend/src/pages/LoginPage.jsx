@@ -58,23 +58,26 @@ export function LoginPage() {
     <div
       className="fixed inset-0 z-[9998] flex items-center justify-center overflow-hidden p-5"
       style={{
-        background: 'linear-gradient(150deg,#001428 0%,#002850 35%,#003A75 65%,#004B96 100%)',
+        background: 'linear-gradient(150deg,#001428 0%,#002850 35%,#003559 65%,#004a99 100%)',
       }}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -right-[120px] -top-[160px] size-[600px] rounded-full bg-[radial-gradient(circle,rgba(232,96,10,0.12),transparent_65%)]" />
-        <div className="absolute -bottom-[200px] -left-[100px] size-[700px] rounded-full bg-[radial-gradient(circle,rgba(0,87,168,0.2),transparent_65%)]" />
+        <div className="absolute -right-[120px] -top-[160px] size-[600px] rounded-full bg-[radial-gradient(circle,rgba(230,126,34,0.14),transparent_65%)]" />
+        <div className="absolute -bottom-[200px] -left-[100px] size-[700px] rounded-full bg-[radial-gradient(circle,rgba(0,74,153,0.22),transparent_65%)]" />
         <div className="absolute left-[5%] top-[40%] h-[40%] w-px bg-gradient-to-b from-transparent via-white/[0.06] to-transparent" />
         <div className="absolute right-[8%] top-[20%] h-[55%] w-px bg-gradient-to-b from-transparent via-sdb-orange/12 to-transparent" />
       </div>
 
       <div className="relative z-[1] mx-5 w-full max-w-[440px]">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 inline-flex size-16 items-center justify-center rounded-full bg-sdb-orange text-[28px] text-white shadow-[0_0_0_8px_rgba(232,96,10,0.18),0_8px_32px_rgba(0,0,0,0.3)]">
+          <div className="mx-auto mb-4 inline-flex size-16 items-center justify-center rounded-full bg-sdb-orange text-[28px] text-white shadow-[0_0_0_8px_rgba(230,126,34,0.2),0_8px_32px_rgba(0,0,0,0.3)]">
             ✝
           </div>
-          <div className="mb-1 font-serif text-xl font-bold leading-tight text-white">
-            Global Salesian Digital Platform
+          <div className="mx-auto mb-1 inline-flex flex-col rounded-lg border border-white/15 bg-white/[0.08] px-4 py-2.5">
+            <span className="font-serif text-xl font-bold leading-tight text-white">Global Salesian</span>
+            <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
+              Digital Platform
+            </span>
           </div>
           <div className="text-[13px] text-white/55">
             Salesian Congregation · South Asia coordination

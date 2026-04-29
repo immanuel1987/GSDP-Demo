@@ -1,18 +1,25 @@
-// /** Base URL for backend (e.g. `VITE_API_BASE_URL` in `.env.development`). */
-// export function apiBase() {
-//   const raw = import.meta.env.VITE_API_BASE_URL
-//   const s = raw === undefined || raw === null ? '' : String(raw).trim()
-//   if (s) return s.replace(/\/$/, '')
-//   return 'http://127.0.0.1:2005'
-// }
-
-
+/** Base URL for backend (e.g. `VITE_API_BASE_URL` in `.env.development`). */
 export function apiBase() {
   const raw = import.meta.env.VITE_API_BASE_URL
   const s = raw === undefined || raw === null ? '' : String(raw).trim()
   if (s) return s.replace(/\/$/, '')
-  return 'https://gsdpapi.boscosofttech.com'
+  return 'http://127.0.0.1:2005'
 }
+
+
+// export function apiBase() {
+//   const raw = import.meta.env.VITE_API_BASE_URL
+//   const s = raw === undefined || raw === null ? '' : String(raw).trim()
+//   if (s) return s.replace(/\/$/, '')
+//   return 'http://3.111.23.138:2005'
+// }
+
+// export function apiBase() {
+//   const raw = import.meta.env.VITE_API_BASE_URL
+//   const s = raw === undefined || raw === null ? '' : String(raw).trim()
+//   if (s) return s.replace(/\/$/, '')
+//   return 'https://meredith-metabolic-staidly.ngrok-free.dev'
+// }
 
 
 // export function apiBase() {
@@ -39,7 +46,7 @@ function mergeApiFetchInit(init) {
 export function apiFetch(input, init) {
   return fetch(input, mergeApiFetchInit(init))
 }
-//This is the ontology mapped for fetching resources from the ontology table additinal
+
 export async function fetchOntologyRows({ limit = 80, offset = 0, q = '' } = {}) {
   const params = new URLSearchParams()
   params.set('limit', String(limit))
@@ -339,8 +346,8 @@ export function mapOntologyRowToResource(row, index) {
   }
 
   const coverGradients = [
-    'linear-gradient(135deg,#003A75,#0057A8)',
-    'linear-gradient(135deg,#B84D00,#E8600A)',
+    'linear-gradient(135deg,#003559,#004A99)',
+    'linear-gradient(135deg,#B86218,#E67E22)',
     'linear-gradient(135deg,#1A6B3C,#2D9B5A)',
     'linear-gradient(135deg,#5B21B6,#7C3AED)',
   ]

@@ -1,7 +1,7 @@
 export function RectorRibbon({ onToast }) {
   return (
-    <div className="relative flex flex-col gap-8 overflow-hidden border-b-4 border-sdb-orange border-t border-white/[0.06] bg-gradient-to-br from-[#001428] via-[#003A75] to-[#004B96] px-4 py-7 sm:flex-row sm:items-center sm:gap-9 sm:px-8 lg:px-14 lg:py-7 before:pointer-events-none before:absolute before:left-[calc(1rem-20px)] before:top-1/2 before:size-[200px] before:-translate-y-1/2 before:rounded-full before:bg-[radial-gradient(circle,rgba(232,96,10,0.18),transparent_70%)] sm:before:left-[calc(2rem-20px)] lg:before:left-[calc(3.5rem-20px)] after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-[40%] after:bg-[repeating-linear-gradient(45deg,transparent,transparent_18px,rgba(255,255,255,0.012)_18px,rgba(255,255,255,0.012)_19px)]">
-      <div className="relative z-[1] flex size-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-sdb-orange bg-gradient-to-br from-[#1A5FAA] to-sdb-blue-mid text-3xl text-white shadow-[0_0_0_6px_rgba(232,96,10,0.18),0_8px_32px_rgba(0,0,0,0.4)]">
+    <div className="relative flex flex-col gap-8 overflow-hidden border-b-4 border-sdb-orange border-t border-white/[0.06] bg-gradient-to-br from-[#001428] via-[#003559] to-[#004a99] px-4 py-7 sm:flex-row sm:items-center sm:gap-9 sm:px-8 lg:px-14 lg:py-7 before:pointer-events-none before:absolute before:left-[calc(1rem-20px)] before:top-1/2 before:size-[200px] before:-translate-y-1/2 before:rounded-full before:bg-[radial-gradient(circle,rgba(230,126,34,0.2),transparent_70%)] sm:before:left-[calc(2rem-20px)] lg:before:left-[calc(3.5rem-20px)] after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-[40%] after:bg-[repeating-linear-gradient(45deg,transparent,transparent_18px,rgba(255,255,255,0.012)_18px,rgba(255,255,255,0.012)_19px)]">
+      <div className="relative z-[1] flex size-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[3px] border-sdb-orange bg-gradient-to-br from-[#004a99] to-sdb-blue-mid text-3xl text-white shadow-[0_0_0_6px_rgba(230,126,34,0.2),0_8px_32px_rgba(0,0,0,0.4)]">
         <span className="font-serif font-bold tracking-tight">FA</span>
       </div>
       <div className="relative z-[1] min-w-0 flex-1">
@@ -42,7 +42,7 @@ export function RectorRibbon({ onToast }) {
             key={s.lbl}
             className={`px-4 py-2 text-center sm:px-7 sm:py-0 ${idx < arr.length - 1 ? 'border-r border-white/10' : ''}`}
           >
-            <div className="font-serif text-2xl font-bold leading-none text-white drop-shadow-[0_2px_12px_rgba(0,87,168,0.5)] sm:text-[28px]">
+            <div className="font-serif text-2xl font-bold leading-none text-white drop-shadow-[0_2px_12px_rgba(0,74,153,0.5)] sm:text-[28px]">
               {s.val}
             </div>
             <div className="mt-1.5 text-xs uppercase tracking-wider text-white/55">{s.lbl}</div>

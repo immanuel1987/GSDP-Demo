@@ -1,18 +1,18 @@
 @import 'tailwindcss';
-@import 'leaflet/dist/leaflet.css';
 
 @theme {
   --font-sans: 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
   --font-serif: 'Merriweather', ui-serif, Georgia, serif;
 
-  --color-sdb-blue: #0057a8;
-  --color-sdb-blue-deep: #003a75;
-  --color-sdb-blue-mid: #2272c3;
-  --color-sdb-blue-light: #d6e8f7;
-  --color-sdb-blue-pale: #eef5fc;
-  --color-sdb-orange: #e8600a;
-  --color-sdb-orange-light: #f08040;
-  --color-orange-text: #b84d00;
+  /* Brand palette aligned with GSDP reference (primary blue + warm orange) */
+  --color-sdb-blue: #004a99;
+  --color-sdb-blue-deep: #003559;
+  --color-sdb-blue-mid: #1f6eb8;
+  --color-sdb-blue-light: #c9dff0;
+  --color-sdb-blue-pale: #edf3fa;
+  --color-sdb-orange: #e67e22;
+  --color-sdb-orange-light: #f0a050;
+  --color-orange-text: #b86218;
   --color-ink: #1a1a1a;
   --color-slate-sdb: #3d4a58;
   --color-mid: #525e6b;
@@ -27,7 +27,9 @@
   }
 
   body {
-    @apply bg-off-white font-sans text-sm leading-relaxed text-ink antialiased;
+    @apply bg-off-white font-sans text-ink antialiased;
+    font-size: clamp(16px, 0.55vw + 14px, 18px);
+    line-height: 1.55;
   }
 
   #root {

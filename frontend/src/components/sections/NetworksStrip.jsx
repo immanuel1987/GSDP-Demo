@@ -18,7 +18,7 @@ export function NetworksStrip({ onToast, onEnterPlatform }) {
         </button>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-border-sdb bg-off-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,57,117,0.08)]">
+        <div className="rounded-xl border border-border-sdb bg-off-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,74,153,0.08)]">
           <div className="mb-2.5 text-2xl">🗺</div>
           <div className="mb-1.5 font-serif text-sm font-bold text-sdb-blue-deep">12 South Asia provinces</div>
           <div className="mb-3 text-xs leading-relaxed text-mid">
@@ -48,7 +48,7 @@ export function NetworksStrip({ onToast, onEnterPlatform }) {
             </button>
           </div>
         </div>
-        <div className="rounded-xl border border-border-sdb bg-off-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,57,117,0.08)]">
+        <div className="rounded-xl border border-border-sdb bg-off-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,74,153,0.08)]">
           <div className="mb-2.5 text-2xl">🔗</div>
           <div className="mb-1.5 font-serif text-sm font-bold text-sdb-blue-deep">Regional Networks</div>
           <div className="mb-3 text-xs leading-relaxed text-mid">
@@ -78,7 +78,7 @@ export function NetworksStrip({ onToast, onEnterPlatform }) {
             </button>
           </div>
         </div>
-        <div className="rounded-xl border border-border-sdb bg-off-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,57,117,0.08)]">
+        <div className="rounded-xl border border-border-sdb bg-off-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,74,153,0.08)]">
           <div className="mb-2.5 text-2xl">🌐</div>
           <div className="mb-1.5 font-serif text-sm font-bold text-sdb-blue-deep">Global Links</div>
           <div className="mb-3 text-xs leading-relaxed text-mid">
@@ -111,7 +111,7 @@ export function NetworksStrip({ onToast, onEnterPlatform }) {
             </a>
           </div>
         </div>
-        <div className="rounded-xl border border-border-sdb bg-gradient-to-br from-sdb-blue-pale to-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,57,117,0.08)]">
+        <div className="rounded-xl border border-border-sdb bg-gradient-to-br from-sdb-blue-pale to-white p-5 transition-all hover:border-sdb-blue-light hover:shadow-[0_4px_20px_rgba(0,74,153,0.08)]">
           <div className="mb-2.5 text-2xl">✉</div>
           <div className="mb-1.5 font-serif text-sm font-bold text-sdb-blue-deep">Stay Connected</div>
           <div className="mb-3 text-xs leading-relaxed text-mid">

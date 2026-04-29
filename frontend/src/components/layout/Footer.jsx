@@ -52,12 +52,13 @@ export function Footer({ onFooterAction }) {
         <div>
           <SdbGlobeLogo size={44} />
           <div className="mt-3.5">
-            <div className="font-serif text-base font-bold leading-tight text-white">
-              Global Salesian
-              <br />
-              Digital Platform
+            <div className="inline-flex flex-col rounded-lg border border-white/12 bg-white/[0.07] px-3.5 py-2.5">
+              <span className="font-serif text-base font-bold leading-tight text-white">Global Salesian</span>
+              <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Digital Platform
+              </span>
             </div>
-            <div className="mt-1.5 text-[11px] uppercase tracking-wider text-white/45">
+            <div className="mt-2.5 text-[11px] uppercase tracking-wider text-white/45">
               Open access · worldwide
             </div>
           </div>

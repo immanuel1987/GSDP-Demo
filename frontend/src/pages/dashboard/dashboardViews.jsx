@@ -836,26 +836,26 @@ const NETWORKS_PROVINCES = [
 ]
 
 const NETWORKS_REGIONAL = [
-  { dot: '#0057A8', label: 'Don Bosco Youth Animation (DBYA)', toast: 'Don Bosco Youth Animation (DBYA) · coordinated by INM' },
-  { dot: '#0057A8', label: 'Don Bosco Schools (AIDBES)', toast: 'Don Bosco Schools / AIDBES · 261 schools · INK' },
-  { dot: '#2272C3', label: 'DB Higher Education India (DBHEI)', toast: 'DB Higher Education India (DBHEI) · 51 colleges · INK' },
+  { dot: '#004A99', label: 'Don Bosco Youth Animation (DBYA)', toast: 'Don Bosco Youth Animation (DBYA) · coordinated by INM' },
+  { dot: '#004A99', label: 'Don Bosco Schools (AIDBES)', toast: 'Don Bosco Schools / AIDBES · 261 schools · INK' },
+  { dot: '#1F6EB8', label: 'DB Higher Education India (DBHEI)', toast: 'DB Higher Education India (DBHEI) · 51 colleges · INK' },
   { dot: '#1A6B3C', label: 'Child Friendly Cities (CFCI)', toast: 'Child Friendly Cities Initiative (CFCI)' },
-  { dot: '#B84D00', label: 'Young at Risk Forum (DB YaR)', toast: 'Young at Risk Forum India (DB YaR) · 174 centres · INH' },
+  { dot: '#B86218', label: 'Young at Risk Forum (DB YaR)', toast: 'Young at Risk Forum India (DB YaR) · 174 centres · INH' },
   { dot: '#7A5000', label: 'DB Job Placement Network (JPN)', toast: 'Don Bosco Job Placement Network (JPN) · donboscojobs.org' },
-  { dot: '#0057A8', label: 'Don Bosco Tech (DB Tech)', toast: 'Don Bosco Tech (DB Tech) · 138 institutes · INN · dbtech.in' },
+  { dot: '#004A99', label: 'Don Bosco Tech (DB Tech)', toast: 'Don Bosco Tech (DB Tech) · 138 institutes · INN · dbtech.in' },
   { dot: '#2D6A4F', label: 'DB Indigenous Cultures (DBCIC)', toast: 'DB Centre for Indigenous Cultures (DBCIC) · dbcic.org' },
   { dot: '#5B21B6', label: 'Don Bosco Renewal Centre (DBYP)', toast: 'Don Bosco Renewal Centre (DBYP)' },
-  { dot: '#003A75', label: 'Don Bosco Network (Bosconet)', toast: 'Don Bosco Network (Bosconet) · bosconet.in · INP' },
-  { dot: '#003A75', label: 'DB Communications (BOSCOM)', toast: 'Don Bosco Communications (BOSCOM) · South Asia · INB' },
+  { dot: '#003559', label: 'Don Bosco Network (Bosconet)', toast: 'Don Bosco Network (Bosconet) · bosconet.in · INP' },
+  { dot: '#003559', label: 'DB Communications (BOSCOM)', toast: 'Don Bosco Communications (BOSCOM) · South Asia · INB' },
 ]
 
 const NETWORKS_GLOBAL_LINKS = [
-  { href: 'https://www.sdb.org/en', dot: '#0057A8', label: 'Salesian Worldwide (sdb.org)' },
-  { href: 'https://infoans.org/en/', dot: '#B84D00', label: 'Info ANS (News Agency)' },
+  { href: 'https://www.sdb.org/en', dot: '#004A99', label: 'Salesian Worldwide (sdb.org)' },
+  { href: 'https://infoans.org/en/', dot: '#B86218', label: 'Info ANS (News Agency)' },
   { href: 'https://www.donboscogreen.org/', dot: '#1A6B3C', label: 'Don Bosco Green Alliance' },
   { href: 'https://famigliasalesiana.org/en', dot: '#5B21B6', label: 'Salesian Family (32 groups)' },
-  { href: 'https://ius-sdb.com/', dot: '#2272C3', label: 'IUS — Salesian Universities' },
-  { href: 'https://www.donboscosouthasia.org', dot: '#003A75', label: 'Don Bosco South Asia Portal' },
+  { href: 'https://ius-sdb.com/', dot: '#1F6EB8', label: 'IUS — Salesian Universities' },
+  { href: 'https://www.donboscosouthasia.org', dot: '#003559', label: 'Don Bosco South Asia Portal' },
 ]
 
 const NETWORKS_WAY_PILLS = [
@@ -1559,11 +1559,11 @@ const ANALYTICS_AI_ROWS = [
 ]
 
 const ANALYTICS_NETWORK_ROWS = [
-  ['Bosconet NGOs', 350, 350, '#0057A8'],
-  ['DB Tech Institutes', 138, 350, '#E8600A'],
+  ['Bosconet NGOs', 350, 350, '#004A99'],
+  ['DB Tech Institutes', 138, 350, '#E67E22'],
   ['DB Schools', 261, 350, '#1A6B3C'],
   ['DB Colleges', 51, 350, '#5B21B6'],
-  ['YaR Centres', 174, 350, '#B84D00'],
+  ['YaR Centres', 174, 350, '#B86218'],
   ['Parishes', 174, 350, '#2D6A4F'],
 ]
 
@@ -1601,7 +1601,7 @@ const ANALYTICS_COMPLIANCE_GRID = [
   { code: 'LKC', score: 61, color: '#B02020' },
 ]
 
-const ANALYTICS_BAR_GRADIENT = 'linear-gradient(90deg, #0057A8, #E8600A)'
+const ANALYTICS_BAR_GRADIENT = 'linear-gradient(90deg, #004A99, #E67E22)'
 
 function barRowsFromMaxTuples(tuples) {
   const maxVal = tuples[0][1]
@@ -1652,7 +1652,7 @@ function AnalyticsBarChart({ rows }) {
 
 const ANALYTICS_AREA_BAR_ROWS = barRowsFromMaxTuples(ANALYTICS_AREA_ROWS)
 const ANALYTICS_TYPE_BAR_ROWS = barRowsFromMaxTuples(ANALYTICS_TYPE_ROWS)
-const ANALYTICS_AI_BAR_ROWS = barRowsFromMaxTuples(ANALYTICS_AI_ROWS).map((r) => ({ ...r, barColor: 'var(--color-sdb-orange, #E8600A)' }))
+const ANALYTICS_AI_BAR_ROWS = barRowsFromMaxTuples(ANALYTICS_AI_ROWS).map((r) => ({ ...r, barColor: 'var(--color-sdb-orange, #E67E22)' }))
 const ANALYTICS_NETWORK_BAR_ROWS = ANALYTICS_NETWORK_ROWS.map(([label, v, m, c]) => ({
   label,
   value: v,
@@ -1804,7 +1804,7 @@ export function AnalyticsView() {
         <AnalyticsStatCard icon="🌐" iconBg="#E8F0FA" trend="1.75M" value="28" label="States Reached" />
       </div>
 
-      <div className="mb-5 flex flex-col items-stretch gap-4 rounded-2xl border border-[rgba(0,87,168,0.3)] bg-gradient-to-br from-[#002240] to-[#003A75] p-5 shadow-[0_4px_20px_rgba(0,57,117,0.12)] sm:flex-row sm:items-center">
+      <div className="mb-5 flex flex-col items-stretch gap-4 rounded-2xl border border-[rgba(0,74,153,0.32)] bg-gradient-to-br from-[#002240] to-[#003559] p-5 shadow-[0_4px_20px_rgba(0,74,153,0.12)] sm:flex-row sm:items-center">
         <div className="flex size-[42px] shrink-0 items-center justify-center rounded-full bg-sdb-orange text-lg text-white">
           ✦
         </div>
@@ -1891,7 +1891,7 @@ export function AnalyticsView() {
                 sub: '174 YaR centre reports exist but only 12 are cross-linked to the YaR Collection. AI recommends batch-tagging to increase discovery by 340%.',
               },
               {
-                dot: '#2272C3',
+                dot: '#1F6EB8',
                 title: 'DB Tech × Education overlap untapped',
                 sub: '138 vocational institute reports and 261 school directories share no cross-references. AI can generate 400+ semantic links automatically.',
               },
@@ -1915,7 +1915,7 @@ export function AnalyticsView() {
         <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
           <div
             className="flex flex-wrap items-center justify-between gap-2 border-b border-border-sdb px-4 py-2.5"
-            style={{ borderLeftWidth: 3, borderLeftColor: '#0057A8', paddingLeft: 13 }}
+            style={{ borderLeftWidth: 3, borderLeftColor: '#004A99', paddingLeft: 13 }}
           >
             <span className="text-sm font-semibold text-sdb-blue-deep">📈 AI Forecast — Q2 2026</span>
             <span className="rounded-full bg-sdb-blue-pale px-2 py-0.5 text-[11px] font-bold text-sdb-blue-deep">
@@ -1927,7 +1927,7 @@ export function AnalyticsView() {
               <AnalyticsForecastRow
                 label="Resources uploaded"
                 widthPct={78}
-                barColor="#0057A8"
+                barColor="#004A99"
                 current="12,847"
                 forecast="14,200"
               />
@@ -2044,7 +2044,7 @@ export function AnalyticsView() {
                         style={
                           isFcst
                             ? { width: `${pct}%`, background: '#C07A00', opacity: 0.7 }
-                            : { width: `${pct}%`, background: '#0057A8' }
+                            : { width: `${pct}%`, background: '#004A99' }
                         }
                       />
                     </div>
@@ -2263,7 +2263,7 @@ const GOVERNANCE_REGION_ROWS = [
 
 function governanceRegionBarBg(score) {
   return score >= 80
-    ? 'linear-gradient(90deg, var(--color-sdb-blue, #0057A8), var(--color-sdb-blue-mid, #2272C3))'
+    ? 'linear-gradient(90deg, var(--color-sdb-blue, #004A99), var(--color-sdb-blue-mid, #1F6EB8))'
     : 'linear-gradient(90deg, var(--color-danger, #DC2626), #E53E3E)'
 }
 

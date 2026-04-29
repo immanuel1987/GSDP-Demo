@@ -20,7 +20,7 @@ export const ANALYTICS_PROVINCE_DATA = [
     parishes: 12,
     url: 'dbbangalore.org',
     resources: 1847,
-    color: '#0057A8',
+    color: '#004A99',
   },
   {
     code: 'INM',
@@ -39,7 +39,7 @@ export const ANALYTICS_PROVINCE_DATA = [
     parishes: 14,
     url: 'donboscochennai.org',
     resources: 1624,
-    color: '#2272C3',
+    color: '#1f6eb8',
   },
   {
     code: 'IND',
@@ -58,7 +58,7 @@ export const ANALYTICS_PROVINCE_DATA = [
     parishes: 18,
     url: 'donboscodimapur.org',
     resources: 892,
-    color: '#E8600A',
+    color: '#E67E22',
   },
   {
     code: 'ING',
@@ -115,7 +115,7 @@ export const ANALYTICS_PROVINCE_DATA = [
     parishes: 15,
     url: 'donboscosouthasia.org',
     resources: 978,
-    color: '#003A75',
+    color: '#003559',
   },
   {
     code: 'INB',
@@ -134,7 +134,7 @@ export const ANALYTICS_PROVINCE_DATA = [
     parishes: 22,
     url: 'sdbinb.in',
     resources: 1567,
-    color: '#B84D00',
+    color: '#B86218',
   },
   {
     code: 'INN',
@@ -210,7 +210,7 @@ export const ANALYTICS_PROVINCE_DATA = [
     parishes: 16,
     url: 'donboscotiruchy.org',
     resources: 1198,
-    color: '#003A75',
+    color: '#003559',
   },
   {
     code: 'LKC',

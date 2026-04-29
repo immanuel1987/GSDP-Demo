@@ -2,7 +2,7 @@
 export const DASHBOARD_RESOURCES = [
   {
     id: 'RES-001',
-    cover: 'linear-gradient(135deg,#003A75,#0057A8)',
+    cover: 'linear-gradient(135deg,#003559,#004A99)',
     publisher: 'SDB Bangalore Province',
     title: 'Sacred Heart Province Bangalore (INK) — Annual Mission Report 2025',
     author: 'Fr. Jose Koyickal, Provincial · dbbangalore.org',
@@ -22,7 +22,7 @@ export const DASHBOARD_RESOURCES = [
   },
   {
     id: 'RES-002',
-    cover: 'linear-gradient(135deg,#B84D00,#E8600A)',
+    cover: 'linear-gradient(135deg,#B86218,#E67E22)',
     publisher: 'INK Province Communications',
     title: '"A Life Rewritten" — Shyam\'s Journey: Street Youth to Stable Livelihood',
     author: 'INK Province Communications · dbbangalore.org',
@@ -103,7 +103,7 @@ export const DASHBOARD_RESOURCES = [
   },
   {
     id: 'RES-006',
-    cover: 'linear-gradient(135deg,#B84D00,#E8600A)',
+    cover: 'linear-gradient(135deg,#B86218,#E67E22)',
     publisher: 'INH Province',
     title: 'Disha Job Mela — Church–Industry Collaboration Report',
     author: 'INH Province · donboscohyderabad.org',
@@ -122,7 +122,7 @@ export const DASHBOARD_RESOURCES = [
   },
   {
     id: 'RES-007',
-    cover: 'linear-gradient(135deg,#003A75,#0057A8)',
+    cover: 'linear-gradient(135deg,#003559,#004A99)',
     publisher: 'SDB Panjim Province',
     title: 'Salesian Province of Panjim (INP) — Bosconet Partnership Resource Guide',
     author: 'Fr. Clive Justin Telles · sdbpanjim.org',
@@ -160,7 +160,7 @@ export const DASHBOARD_RESOURCES = [
   },
   {
     id: 'RES-009',
-    cover: 'linear-gradient(135deg,#B84D00,#E8600A)',
+    cover: 'linear-gradient(135deg,#B86218,#E67E22)',
     publisher: 'INT Province Commissions',
     title: 'Vazhikatti Career Guidance Framework — South India Dioceses',
     author: 'INT Province Commissions · donboscotiruchy.org',
@@ -198,7 +198,7 @@ export const DASHBOARD_RESOURCES = [
   },
   {
     id: 'RES-011',
-    cover: 'linear-gradient(135deg,#003A75,#0057A8)',
+    cover: 'linear-gradient(135deg,#003559,#004A99)',
     publisher: 'Don Bosco Network',
     title: 'Bosconet Annual Report 2024 — 1.75 Million Lives Reached',
     author: 'Don Bosco Network · bosconet.in',
@@ -236,7 +236,7 @@ export const DASHBOARD_RESOURCES = [
   },
   {
     id: 'RES-013',
-    cover: 'linear-gradient(135deg,#003A75,#0057A8)',
+    cover: 'linear-gradient(135deg,#003559,#004A99)',
     publisher: 'SPCSA',
     title: 'Salesian Spirituality — Little Virtues in Daily Mission',
     author: 'SPCSA Spirituality Commission',
@@ -274,7 +274,7 @@ export const DASHBOARD_RESOURCES = [
   },
   {
     id: 'RES-015',
-    cover: 'linear-gradient(135deg,#003A75,#0057A8)',
+    cover: 'linear-gradient(135deg,#003559,#004A99)',
     publisher: 'SDB Shillong Province',
     title: 'INS Province Shillong — Formation Report & North East Mission 2025',
     author: 'Fr. John Zosiama · donboscoshillong.org',
@@ -384,9 +384,9 @@ export const DASHBOARD_PERSONS = [
 
 export const DASHBOARD_COLLECTIONS = [
   { id: 'C-01', title: 'The Legacy of Michele Rua', desc: "Primary sources on Don Bosco's first successor.", chip: 'Historical Figures', count: 47, bg: 'linear-gradient(135deg,#1C0A00,#5C2800)' },
-  { id: 'C-02', title: 'Salesian Bulletin — Century Archive', desc: '1877 to present — oldest Catholic periodical.', chip: 'Thematic Archive', count: 1200, bg: 'linear-gradient(135deg,#002240,#0057A8)' },
+  { id: 'C-02', title: 'Salesian Bulletin — Century Archive', desc: '1877 to present — oldest Catholic periodical.', chip: 'Thematic Archive', count: 1200, bg: 'linear-gradient(135deg,#002240,#004A99)' },
   { id: 'C-03', title: 'Social Works in Latin America', desc: 'Field reports and best practices.', chip: 'Regional', count: 89, bg: 'linear-gradient(135deg,#001C00,#006020)' },
-  { id: 'C-04', title: 'The Preventive System Today', desc: "Contemporary applications of Don Bosco's method.", chip: 'Pedagogy', count: 63, bg: 'linear-gradient(135deg,#1C0A00,#E8600A)' },
+  { id: 'C-04', title: 'The Preventive System Today', desc: "Contemporary applications of Don Bosco's method.", chip: 'Pedagogy', count: 63, bg: 'linear-gradient(135deg,#1C0A00,#E67E22)' },
   { id: 'C-05', title: 'World Youth Day — Salesian Presence', desc: 'Documentation from every WYD since 1987.', chip: 'Youth Ministry', count: 38, bg: 'linear-gradient(135deg,#1A0040,#6040C0)' },
   { id: 'C-06', title: 'Initial Formation — Global Standards', desc: 'Official formation documents and Ratio Fundamentalis.', chip: 'Formation', count: 72, bg: 'linear-gradient(135deg,#001220,#006090)' },
   { id: 'C-07', title: 'Salesian Missions in Asia', desc: 'Mission reports and pastoral guides from Asia.', chip: 'Missiology', count: 54, bg: 'linear-gradient(135deg,#001A00,#2D6A4F)' },

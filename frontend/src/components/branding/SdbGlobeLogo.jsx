@@ -9,7 +9,7 @@ export function SdbGlobeLogo({ size = 36, className = '' }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <circle cx="18" cy="18" r="17" fill="#0057A8" stroke="#003A75" strokeWidth="1" />
+      <circle cx="18" cy="18" r="17" fill="#004A99" stroke="#003559" strokeWidth="1" />
       <ellipse
         cx="18"
         cy="18"
@@ -28,12 +28,12 @@ export function SdbGlobeLogo({ size = 36, className = '' }) {
         strokeWidth="1.2"
         fill="none"
       />
-      <circle cx="15" cy="15" r="1.5" fill="#E8600A" />
+      <circle cx="15" cy="15" r="1.5" fill="#E67E22" />
       <circle cx="18" cy="13" r="1.8" fill="white" />
-      <circle cx="21" cy="15" r="1.5" fill="#E8600A" />
-      <line x1="15" y1="16.5" x2="15" y2="21" stroke="#E8600A" strokeWidth="1.5" />
+      <circle cx="21" cy="15" r="1.5" fill="#E67E22" />
+      <line x1="15" y1="16.5" x2="15" y2="21" stroke="#E67E22" strokeWidth="1.5" />
       <line x1="18" y1="14.8" x2="18" y2="21" stroke="white" strokeWidth="1.8" />
-      <line x1="21" y1="16.5" x2="21" y2="21" stroke="#E8600A" strokeWidth="1.5" />
+      <line x1="21" y1="16.5" x2="21" y2="21" stroke="#E67E22" strokeWidth="1.5" />
       <polyline points="18,8 15,13 18,11 21,13 18,8" fill="white" stroke="none" />
     </svg>
   )

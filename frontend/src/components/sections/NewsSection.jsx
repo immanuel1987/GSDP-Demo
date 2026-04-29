@@ -56,7 +56,7 @@ export function NewsSection({ onToast }) {
             key={c.title}
             type="button"
             onClick={() => onToast?.(c.toast)}
-            className="cursor-pointer rounded-xl border border-border-sdb bg-off-white text-left transition-all hover:border-sdb-blue-light hover:shadow-[0_6px_24px_rgba(0,57,117,0.1)]"
+            className="cursor-pointer rounded-xl border border-border-sdb bg-off-white text-left transition-all hover:border-sdb-blue-light hover:shadow-[0_6px_24px_rgba(0,74,153,0.1)]"
           >
             <div className={`h-3 ${topBar[c.top]}`} />
             <div className="p-4">

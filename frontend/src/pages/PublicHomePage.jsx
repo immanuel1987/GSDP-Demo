@@ -29,7 +29,15 @@ const SLIDES = [
     bg: 'https://archive.sdb.org/images/headers/cabeceraInterior2.jpg',
     bgPos: 'center center',
     label: 'Rector Major · Fr. Fabio Attard',
-    title: <>136 nations.<br /><em>One Salesian heart.</em></>,
+    title: (
+      <>
+        <span className="hp-hero-worldline">
+          <span className="hp-hero-world-n">136 nations</span>.
+        </span>
+        <br />
+        <em>One Salesian heart.</em>
+      </>
+    ),
     lead: 'Elected on 25 March 2025, the 11th Successor of Don Bosco leads 13,750 Salesians in 92 provinces serving the poorest and most vulnerable young people worldwide.',
     placeholder: 'Try: "How did Don Bosco approach urban poverty in 19th century Turin?"',
     cta: 'Explore →',
@@ -97,7 +105,7 @@ function HeroSlider() {
     const v = overviewVideoRef.current
     if (v) {
       v.currentTime = 0
-      v.play().catch(() => { })
+      v.play().catch(() => {})
     }
     const onKey = (e) => {
       if (e.key === 'Escape') setOverviewOpen(false)
@@ -441,10 +449,14 @@ export function PublicHomePage() {
       <header className="hp-header">
         <div className="hp-nav">
           <div className="hp-brand" onClick={() => navigate('/')}>
-            <div className="hp-brand-mark">G</div>
-            <div className="hp-brand-txt">
-              <div className="l1">Global Salesian</div>
-              <div className="l2">Digital Platform</div>
+            <div className="hp-brand-tile">
+              <div className="hp-brand-tile-mark" aria-hidden>
+                G
+              </div>
+              <div className="hp-brand-tile-body">
+                <div className="hp-brand-tile-title">Global Salesian</div>
+                <div className="hp-brand-tile-sub">Digital Platform</div>
+              </div>
             </div>
           </div>
           <HpNavMenu />
@@ -472,71 +484,71 @@ export function PublicHomePage() {
           <div className="hp-hero-r">
             {/* Rector card */}
             <div className="hp-rector">
-              <div className="hp-rector-av">FA</div>
-              <div className="hp-rector-info">
-                <div className="role">Rector Major · 11th Successor</div>
-                <h3>Fr. Fabio Attard</h3>
-                <div className="since">Since 25 Mar 2025 · Term 2025–2031</div>
+            <div className="hp-rector-av">FA</div>
+            <div className="hp-rector-info">
+              <div className="role">Rector Major · 11th Successor</div>
+              <h3>Fr. Fabio Attard</h3>
+              <div className="since">Since 25 Mar 2025 · Term 2025–2031</div>
+            </div>
+            <div className="hp-rector-actions">
+              <a>Biography ↗</a>
+              <a>Chapter docs ↗</a>
+            </div>
+          </div>
+
+          {/* Live stack */}
+          <div className="hp-live-stack">
+            <div className="hp-live">
+              <div className="hp-live-h">
+                <span className="hp-live-lbl">Live Knowledge Base</span>
+                <span className="hp-live-upd">Updated today</span>
               </div>
-              <div className="hp-rector-actions">
-                <a>Biography ↗</a>
-                <a>Chapter docs ↗</a>
+              <div className="hp-live-grid">
+                {[
+                  { v: '12,847', k: 'Resources', d: '▲ 312 / mo' },
+                  { v: '136', k: 'Nations', d: '+2 since \'24', world: true },
+                  { v: '13,750', k: 'Salesians', d: 'GC29 census' },
+                  { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
+                ].map((c, i) => (
+                  <div key={i} className={`hp-live-cell${c.world ? ' hp-live-cell--world' : ''}`}>
+                    <div className="v">{c.v}</div>
+                    <div className="k">{c.k}</div>
+                    <div className="delta">{c.d}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Live stack */}
-            <div className="hp-live-stack">
-              <div className="hp-live">
-                <div className="hp-live-h">
-                  <span className="hp-live-lbl">Live Knowledge Base</span>
-                  <span className="hp-live-upd">Updated today</span>
-                </div>
-                <div className="hp-live-grid">
-                  {[
-                    { v: '12,847', k: 'Resources', d: '▲ 312 / mo' },
-                    { v: '136', k: 'Nations', d: '+2 since \'24' },
-                    { v: '13,750', k: 'Salesians', d: 'GC29 census' },
-                    { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
-                  ].map((c, i) => (
-                    <div key={i} className="hp-live-cell">
-                      <div className="v">{c.v}</div>
-                      <div className="k">{c.k}</div>
-                      <div className="delta">{c.d}</div>
-                    </div>
-                  ))}
-                </div>
+            {/* Trending */}
+            <div className="hp-trend">
+              <div className="hp-trend-h">
+                <span className="hp-trend-t">Trending searches</span>
+                <span className="hp-trend-week">Past 7 days</span>
               </div>
-
-              {/* Trending */}
-              <div className="hp-trend">
-                <div className="hp-trend-h">
-                  <span className="hp-trend-t">Trending searches</span>
-                  <span className="hp-trend-week">Past 7 days</span>
-                </div>
-                <div className="hp-trend-list">
-                  {[
-                    { q: 'Preventive system in education', ct: '+42%', up: true },
-                    { q: 'Strenna 2026 commentary', ct: '+28%', up: true },
-                    { q: 'Youth ministry post-pandemic', ct: '+19%', up: true },
-                    { q: 'Salesian Bulletin · 1877 archive', ct: '→ steady', up: false },
-                  ].map((t, i) => (
-                    <div key={i} className="hp-trend-row">
-                      <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
-                      <span className="hp-trend-q">{t.q}</span>
-                      <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
-                        {t.up && (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="m6 15 6-6 6 6" />
-                          </svg>
-                        )}
-                        {t.ct}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="hp-trend-list">
+                {[
+                  { q: 'Preventive system in education', ct: '+42%', up: true },
+                  { q: 'Strenna 2026 commentary', ct: '+28%', up: true },
+                  { q: 'Youth ministry post-pandemic', ct: '+19%', up: true },
+                  { q: 'Salesian Bulletin · 1877 archive', ct: '→ steady', up: false },
+                ].map((t, i) => (
+                  <div key={i} className="hp-trend-row">
+                    <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
+                    <span className="hp-trend-q">{t.q}</span>
+                    <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
+                      {t.up && (
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="m6 15 6-6 6 6" />
+                        </svg>
+                      )}
+                      {t.ct}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -552,7 +564,7 @@ export function PublicHomePage() {
             <a className="hp-panel-all" onClick={() => navigate('/login')} style={{ cursor: 'pointer' }}>
               All news →
             </a>
-
+       
           </div>
           <div className="hp-news-list">
             {[
@@ -648,13 +660,13 @@ export function PublicHomePage() {
               </g>
               <g fontFamily="'JetBrains Mono', ui-monospace, monospace" fontWeight="600">
                 <g filter="url(#hp-map-glow)">
-                  <circle cx="200" cy="58" r="10" fill="#e86520" opacity="0.22" />
-                  <circle cx="200" cy="58" r="5" fill="#e86520" stroke="#fff" strokeWidth="1.5" />
+                  <circle cx="200" cy="58" r="10" fill="#e67e22" opacity="0.22" />
+                  <circle cx="200" cy="58" r="5" fill="#e67e22" stroke="#fff" strokeWidth="1.5" />
                   <text x="200" y="42" textAnchor="middle" fontSize="10" fill="#0a2540">Valdocco · HQ</text>
                 </g>
                 <g filter="url(#hp-map-glow)">
-                  <circle cx="283" cy="112" r="11" fill="#2563c4" opacity="0.22" />
-                  <circle cx="283" cy="112" r="5.5" fill="#2563c4" stroke="#fff" strokeWidth="1.5" />
+                  <circle cx="283" cy="112" r="11" fill="#1f6eb8" opacity="0.22" />
+                  <circle cx="283" cy="112" r="5.5" fill="#1f6eb8" stroke="#fff" strokeWidth="1.5" />
                   <text x="283" y="132" textAnchor="middle" fontSize="10" fill="#0a2540">South Asia pilot</text>
                 </g>
                 <circle cx="65" cy="72" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
@@ -674,8 +686,8 @@ export function PublicHomePage() {
           </button>
           <div className="hp-map-foot">
             <div className="hp-map-legend">
-              <span><span className="hp-map-dot" style={{ background: '#e86520' }} />HQ</span>
-              <span><span className="hp-map-dot" style={{ background: '#2563c4' }} />Pilot</span>
+              <span><span className="hp-map-dot" style={{ background: '#e67e22' }} />HQ</span>
+              <span><span className="hp-map-dot" style={{ background: '#1f6eb8' }} />Pilot</span>
               <span><span className="hp-map-dot" style={{ background: '#1a8a6e' }} />Active</span>
               <span><span className="hp-map-dot" style={{ background: '#c9a227' }} />Mission</span>
             </div>
@@ -695,18 +707,18 @@ export function PublicHomePage() {
             <svg viewBox="0 0 600 90" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="hp-grow" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#c8541b" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#c8541b" stopOpacity="0" />
+                  <stop offset="0%" stopColor="#d97228" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="#d97228" stopOpacity="0" />
                 </linearGradient>
               </defs>
               <line x1="0" y1="20" x2="600" y2="20" stroke="#e8e0c8" strokeDasharray="2 4" />
               <line x1="0" y1="55" x2="600" y2="55" stroke="#e8e0c8" strokeDasharray="2 4" />
               <path d="M0,80 L40,75 L80,72 L120,68 L160,60 L200,58 L240,52 L280,48 L320,42 L360,36 L400,30 L440,26 L480,20 L520,15 L560,12 L600,8 L600,90 L0,90 Z" fill="url(#hp-grow)" />
-              <path d="M0,80 L40,75 L80,72 L120,68 L160,60 L200,58 L240,52 L280,48 L320,42 L360,36 L400,30 L440,26 L480,20 L520,15 L560,12 L600,8" fill="none" stroke="#c8541b" strokeWidth="2" />
-              <circle cx="0" cy="80" r="3" fill="#c8541b" />
-              <circle cx="200" cy="58" r="3" fill="#c8541b" />
-              <circle cx="400" cy="30" r="3" fill="#c8541b" />
-              <circle cx="600" cy="8" r="4" fill="#c8541b" stroke="#fff" strokeWidth="2" />
+              <path d="M0,80 L40,75 L80,72 L120,68 L160,60 L200,58 L240,52 L280,48 L320,42 L360,36 L400,30 L440,26 L480,20 L520,15 L560,12 L600,8" fill="none" stroke="#d97228" strokeWidth="2" />
+              <circle cx="0" cy="80" r="3" fill="#d97228" />
+              <circle cx="200" cy="58" r="3" fill="#d97228" />
+              <circle cx="400" cy="30" r="3" fill="#d97228" />
+              <circle cx="600" cy="8" r="4" fill="#d97228" stroke="#fff" strokeWidth="2" />
               <text x="0" y="89" fontFamily="JetBrains Mono" fontSize="8" fill="#6b6452">Q1 '24</text>
               <text x="200" y="89" fontFamily="JetBrains Mono" fontSize="8" fill="#6b6452">Q3 '24</text>
               <text x="400" y="89" fontFamily="JetBrains Mono" fontSize="8" fill="#6b6452">Q1 '25</text>
@@ -717,7 +729,7 @@ export function PublicHomePage() {
             <div className="hp-growth-stat"><span className="k">Total resources</span><span className="v">12,847 <small>▲ 312/mo</small></span></div>
             <div className="hp-growth-stat"><span className="k">Avg time-to-index</span><span className="v">18 hrs <small>−4h</small></span></div>
             <div className="hp-growth-stat"><span className="k">Open access ratio</span><span className="v">100% <small>full corpus</small></span></div>
-            <div className="hp-growth-stat"><span className="k">Active phase</span><span className="v" style={{ color: '#c8541b' }}>Phase 2 · AI</span></div>
+            <div className="hp-growth-stat"><span className="k">Active phase</span><span className="v" style={{ color: '#d97228' }}>Phase 2 · AI</span></div>
           </div>
         </div>
       </section>

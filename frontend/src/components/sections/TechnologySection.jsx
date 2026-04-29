@@ -117,14 +117,14 @@ export function TechnologySection({ onToast }) {
               d: 'OWL ontology · MARC21 cataloguing · Province onboarding · Core search',
             },
             {
-              c: '#E8600A',
+              c: '#E67E22',
               bg: '#FFF5EF',
               phase: 'Phase 2 — Active',
               name: 'AI Integration',
               d: 'Semantic search · Summarization · Translation · AI query assistant',
             },
             {
-              c: '#0057A8',
+              c: '#004A99',
               bg: '#EEF5FC',
               phase: 'Phase 3 — 2026',
               name: 'Network Expansion',
