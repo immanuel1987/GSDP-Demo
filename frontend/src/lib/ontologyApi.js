@@ -1,18 +1,18 @@
 /** Base URL for backend (e.g. `VITE_API_BASE_URL` in `.env.development`). */
-export function apiBase() {
-  const raw = import.meta.env.VITE_API_BASE_URL
-  const s = raw === undefined || raw === null ? '' : String(raw).trim()
-  if (s) return s.replace(/\/$/, '')
-  return 'http://127.0.0.1:2005'
-}
-
-
 // export function apiBase() {
 //   const raw = import.meta.env.VITE_API_BASE_URL
 //   const s = raw === undefined || raw === null ? '' : String(raw).trim()
 //   if (s) return s.replace(/\/$/, '')
-//   return 'http://3.111.23.138:2005'
+//   return 'http://127.0.0.1:2005'
 // }
+
+
+export function apiBase() {
+  const raw = import.meta.env.VITE_API_BASE_URL
+  const s = raw === undefined || raw === null ? '' : String(raw).trim()
+  if (s) return s.replace(/\/$/, '')
+  return 'https://gsdpapi.boscosofttech.com'
+}
 
 // export function apiBase() {
 //   const raw = import.meta.env.VITE_API_BASE_URL
