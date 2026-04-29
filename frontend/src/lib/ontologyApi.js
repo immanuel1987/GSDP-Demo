@@ -39,7 +39,7 @@ function mergeApiFetchInit(init) {
 export function apiFetch(input, init) {
   return fetch(input, mergeApiFetchInit(init))
 }
-
+//This is the ontology mapped for fetching resources from the ontology table additinal
 export async function fetchOntologyRows({ limit = 80, offset = 0, q = '' } = {}) {
   const params = new URLSearchParams()
   params.set('limit', String(limit))
