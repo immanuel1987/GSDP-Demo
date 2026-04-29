@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: gsdp_backend
+    ports:
+      - "2005:2005"
+    volumes:
+      - .:/app
+      # Exclude specific folders from being overwitten by host volume if needed, 
+      # such as local virtual environments
+      - /app/env
+    env_file:
+      - .env
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    command: uvicorn main:app --host 0.0.0.0 --port 2005 --reload
