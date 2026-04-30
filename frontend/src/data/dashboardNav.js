@@ -138,7 +138,7 @@ export const PLATFORM_KPI_STRIP = [
     trend: '+12%',
     val: '12,847',
     lbl: 'Total Resources',
-    orangeTop: true,
+    orangeTop: false,
   },
   {
     icon: '🏛',

@@ -91,7 +91,7 @@ function viewResourceDocument(e, r) {
   if (url) window.open(url, '_blank', 'noopener,noreferrer')
 }
 
-function ResourceDetailModal({ resource, onClose }) {
+export function ResourceDetailModal({ resource, onClose }) {
   if (!resource) return null
 
   const fields = [
@@ -1067,32 +1067,32 @@ export function NetworksView() {
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-busy={loading || undefined}>
         {loading
           ? [0, 1, 2, 3, 4].map((i) => (
-              <div key={i} className="rounded-xl border border-dashed border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm">
-                <div className="mb-2.5 h-9 w-9 animate-pulse rounded-lg bg-slate-200" />
-                <div className="h-8 w-16 animate-pulse rounded bg-slate-200" />
-                <div className="mt-2 h-3 w-28 animate-pulse rounded bg-slate-100" />
-              </div>
-            ))
+            <div key={i} className="rounded-xl border border-dashed border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm">
+              <div className="mb-2.5 h-9 w-9 animate-pulse rounded-lg bg-slate-200" />
+              <div className="h-8 w-16 animate-pulse rounded bg-slate-200" />
+              <div className="mt-2 h-3 w-28 animate-pulse rounded bg-slate-100" />
+            </div>
+          ))
           : kpis.map((k) => (
-              <div
-                key={k.label}
-                className={[
-                  'rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm',
-                  k.orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light',
-                ].join(' ')}
-              >
-                <div className="mb-2.5 flex items-start">
-                  <div
-                    className="flex size-9 items-center justify-center rounded-lg text-base"
-                    style={{ background: k.iconBg }}
-                  >
-                    {k.icon}
-                  </div>
+            <div
+              key={k.label}
+              className={[
+                'rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm',
+                k.orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light',
+              ].join(' ')}
+            >
+              <div className="mb-2.5 flex items-start">
+                <div
+                  className="flex size-9 items-center justify-center rounded-lg text-base"
+                  style={{ background: k.iconBg }}
+                >
+                  {k.icon}
                 </div>
-                <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{k.value}</div>
-                <div className="mt-1 text-xs text-mid">{k.label}</div>
               </div>
-            ))}
+              <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{k.value}</div>
+              <div className="mt-1 text-xs text-mid">{k.label}</div>
+            </div>
+          ))}
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -2057,25 +2057,25 @@ export function AnalyticsView() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        const [ont, sum] = await Promise.all([
-          fetchOntologyRows({ limit: 400, offset: 0 }),
-          fetchOntologySummary().catch(() => null),
-        ])
-        if (cancelled) return
-        setOntologyRows(Array.isArray(ont?.data) ? ont.data : [])
-        setOntologySummary(sum && typeof sum === 'object' ? sum : null)
-      } catch (e) {
-        if (!cancelled) {
-          setOntologyErr(e instanceof Error ? e.message : String(e))
-          setOntologyRows([])
-          setOntologySummary(null)
+      ; (async () => {
+        try {
+          const [ont, sum] = await Promise.all([
+            fetchOntologyRows({ limit: 400, offset: 0 }),
+            fetchOntologySummary().catch(() => null),
+          ])
+          if (cancelled) return
+          setOntologyRows(Array.isArray(ont?.data) ? ont.data : [])
+          setOntologySummary(sum && typeof sum === 'object' ? sum : null)
+        } catch (e) {
+          if (!cancelled) {
+            setOntologyErr(e instanceof Error ? e.message : String(e))
+            setOntologyRows([])
+            setOntologySummary(null)
+          }
+        } finally {
+          if (!cancelled) setOntologyLoaded(true)
         }
-      } finally {
-        if (!cancelled) setOntologyLoaded(true)
-      }
-    })()
+      })()
     return () => {
       cancelled = true
     }

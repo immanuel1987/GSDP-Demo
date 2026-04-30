@@ -1136,10 +1136,10 @@ function rowMatchesHostelHeuristic(row) {
 }
 
 const EMPTY_NETWORK_KPIS = [
-  { orangeTop: true, icon: '🏫', iconBg: '#FEF3C7', value: '0', label: 'School-tagged records' },
+  { orangeTop: false, icon: '🏫', iconBg: '#FEF3C7', value: '0', label: 'School-tagged records' },
   { orangeTop: false, icon: '🎓', iconBg: '#D1FAE5', value: '0', label: 'College-tagged records' },
   { orangeTop: false, icon: '🔧', iconBg: '#E8F0FA', value: '0', label: 'Technical / vocational' },
-  { orangeTop: true, icon: '🛡', iconBg: '#FEF3C7', value: '0', label: 'Social / YaR–tagged' },
+  { orangeTop: false, icon: '🛡', iconBg: '#FEF3C7', value: '0', label: 'Social / YaR–tagged' },
   { orangeTop: false, icon: '🏠', iconBg: '#D1FAE5', value: '0', label: 'Hostel / residential' },
 ]
 

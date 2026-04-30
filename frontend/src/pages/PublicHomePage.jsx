@@ -11,8 +11,10 @@ import {
   fetchOntologyRows,
   fetchOntologySummary,
   formatOntologyFreshness,
+  mapOntologyRowToResource,
 } from '../lib/ontologyApi'
 import gsdpIntroVideoUrl from '../assets/viedo/AI_Platform_Video_Generation_Request.mp4'
+import { ResourceDetailModal } from './dashboard/dashboardViews'
 import './PublicHomePage.css'
 
 /**
@@ -164,7 +166,7 @@ function HeroSlider({ slides: slidesProp, loading }) {
     const v = overviewVideoRef.current
     if (v) {
       v.currentTime = 0
-      v.play().catch(() => {})
+      v.play().catch(() => { })
     }
     const onKey = (e) => {
       if (e.key === 'Escape') setOverviewOpen(false)
@@ -491,30 +493,31 @@ function DistBar({ pct, cls }) {
 // ── Main component ────────────────────────────────────────────────────────────
 export function PublicHomePage() {
   const navigate = useNavigate()
+  const [selectedResource, setSelectedResource] = useState(null)
   const [ontologyBlock, setOntologyBlock] = useState(null)
   const [ontologySummary, setOntologySummary] = useState(null)
   const [homeFetchDone, setHomeFetchDone] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        const [ont, sum] = await Promise.all([
-          fetchOntologyRows({ limit: 32, offset: 0 }),
-          fetchOntologySummary().catch(() => null),
-        ])
-        if (cancelled) return
-        setOntologyBlock(ont && typeof ont === 'object' ? ont : null)
-        setOntologySummary(sum && typeof sum === 'object' ? sum : null)
-      } catch {
-        if (!cancelled) {
-          setOntologyBlock(null)
-          setOntologySummary(null)
+      ; (async () => {
+        try {
+          const [ont, sum] = await Promise.all([
+            fetchOntologyRows({ limit: 32, offset: 0 }),
+            fetchOntologySummary().catch(() => null),
+          ])
+          if (cancelled) return
+          setOntologyBlock(ont && typeof ont === 'object' ? ont : null)
+          setOntologySummary(sum && typeof sum === 'object' ? sum : null)
+        } catch {
+          if (!cancelled) {
+            setOntologyBlock(null)
+            setOntologySummary(null)
+          }
+        } finally {
+          if (!cancelled) setHomeFetchDone(true)
         }
-      } finally {
-        if (!cancelled) setHomeFetchDone(true)
-      }
-    })()
+      })()
     return () => {
       cancelled = true
     }
@@ -565,7 +568,8 @@ export function PublicHomePage() {
   const liveUpdated = formatOntologyFreshness(ontologySummary)
 
   return (
-    <div className="hp-root">
+    <>
+      <div className="hp-root">
 
       {/* UTILITY BAR */}
       <div className="hp-util">
@@ -654,89 +658,89 @@ export function PublicHomePage() {
               )}
             </div>
 
-          {/* Live stack */}
-          <div className="hp-live-stack">
-            <div className="hp-live">
-              <div className="hp-live-h">
-                <span className="hp-live-lbl">Live Knowledge Base</span>
-                <span className="hp-live-upd">{liveUpdated ? `Index · ${liveUpdated}` : 'Updated today'}</span>
-              </div>
-              <div className="hp-live-grid">
-                {!homeFetchDone ? (
-                  [0, 1, 2, 3].map((i) => (
-                    <div key={i} className="hp-live-cell hp-live-cell--skeleton" aria-busy="true">
-                      <div className="v hp-skel-line hp-skel-on-light hp-skel-line--stat" />
-                      <div className="k hp-skel-line hp-skel-on-light hp-skel-line--stat-sm" />
-                      <div className="delta hp-skel-line hp-skel-on-light hp-skel-line--stat-xs" />
-                    </div>
-                  ))
-                ) : (
-                  [
-                    { v: catalogTotalLabel, k: 'Resources', d: 'Catalogued in ontology' },
-                    { v: '136', k: 'Nations', d: "+2 since '24", world: true },
-                    { v: '13,750', k: 'Salesians', d: 'GC29 census' },
-                    { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
-                  ].map((c, i) => (
-                    <div key={i} className={`hp-live-cell${c.world ? ' hp-live-cell--world' : ''}`}>
-                      <div className="v">{c.v}</div>
-                      <div className="k">{c.k}</div>
-                      <div className="delta">{c.d}</div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Trending */}
-            <div className="hp-trend">
-              <div className="hp-trend-h">
-                <span className="hp-trend-t">Trending searches</span>
-                <span className="hp-trend-week">Past 7 days</span>
-              </div>
-              <div className="hp-trend-list">
-                {!homeFetchDone ? (
-                  <div className="hp-data-loading" aria-busy="true">
-                    {[0, 1, 2, 3].map((i) => (
-                      <div key={i} className="hp-trend-row hp-skel-row">
-                        <span className="hp-trend-rk hp-skel-pill" />
-                        <span className="hp-skel-line" />
-                        <span className="hp-trend-ct hp-skel-pill hp-skel-pill--sm" />
+            {/* Live stack */}
+            <div className="hp-live-stack">
+              <div className="hp-live">
+                <div className="hp-live-h">
+                  <span className="hp-live-lbl">Live Knowledge Base</span>
+                  <span className="hp-live-upd">{liveUpdated ? `Index · ${liveUpdated}` : 'Updated today'}</span>
+                </div>
+                <div className="hp-live-grid">
+                  {!homeFetchDone ? (
+                    [0, 1, 2, 3].map((i) => (
+                      <div key={i} className="hp-live-cell hp-live-cell--skeleton" aria-busy="true">
+                        <div className="v hp-skel-line hp-skel-on-light hp-skel-line--stat" />
+                        <div className="k hp-skel-line hp-skel-on-light hp-skel-line--stat-sm" />
+                        <div className="delta hp-skel-line hp-skel-on-light hp-skel-line--stat-xs" />
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  trendingItems.map((t, i) => (
-                    <div
-                      key={t.key ?? i}
-                      className="hp-trend-row"
-                      role="button"
-                      tabIndex={0}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigateLoginNext(navigate, '/dashboard/resources')
-                        }
-                      }}
-                    >
-                      <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
-                      <span className="hp-trend-q">{t.q}</span>
-                      <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
-                        {t.up && (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path d="m6 15 6-6 6 6" />
-                          </svg>
-                        )}
-                        {t.ct}
-                      </span>
+                    ))
+                  ) : (
+                    [
+                      { v: catalogTotalLabel, k: 'Resources', d: 'Catalogued in ontology' },
+                      { v: '136', k: 'Nations', d: "+2 since '24", world: true },
+                      { v: '13,750', k: 'Salesians', d: 'GC29 census' },
+                      { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
+                    ].map((c, i) => (
+                      <div key={i} className={`hp-live-cell${c.world ? ' hp-live-cell--world' : ''}`}>
+                        <div className="v">{c.v}</div>
+                        <div className="k">{c.k}</div>
+                        <div className="delta">{c.d}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Trending */}
+              <div className="hp-trend">
+                <div className="hp-trend-h">
+                  <span className="hp-trend-t">Trending searches</span>
+                  <span className="hp-trend-week">Past 7 days</span>
+                </div>
+                <div className="hp-trend-list">
+                  {!homeFetchDone ? (
+                    <div className="hp-data-loading" aria-busy="true">
+                      {[0, 1, 2, 3].map((i) => (
+                        <div key={i} className="hp-trend-row hp-skel-row">
+                          <span className="hp-trend-rk hp-skel-pill" />
+                          <span className="hp-skel-line" />
+                          <span className="hp-trend-ct hp-skel-pill hp-skel-pill--sm" />
+                        </div>
+                      ))}
                     </div>
-                  ))
-                )}
+                  ) : (
+                    trendingItems.map((t, i) => (
+                      <div
+                        key={t.key ?? i}
+                        className="hp-trend-row"
+                        role="button"
+                        tabIndex={0}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigateLoginNext(navigate, '/dashboard/resources')
+                          }
+                        }}
+                      >
+                        <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
+                        <span className="hp-trend-q">{t.q}</span>
+                        <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
+                          {t.up && (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="m6 15 6-6 6 6" />
+                            </svg>
+                          )}
+                          {t.ct}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </div>
       </section>
 
@@ -764,7 +768,7 @@ export function PublicHomePage() {
             >
               All news →
             </a>
-       
+
           </div>
           <div className="hp-news-list">
             {!homeFetchDone ? (
@@ -1004,6 +1008,45 @@ export function PublicHomePage() {
         </div>
       </section>
 
+      {/* RECENT RESOURCES */}
+      <section className="hp-resources" id="hp-section-resources">
+        <div className="hp-res-h">
+          <div>
+            <h2>Recent resources</h2>
+            <div className="sub">Latest documents catalogued in the ontology</div>
+          </div>
+          <button type="button" className="hp-col-all" onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}>
+            See more →
+          </button>
+        </div>
+        <div className={`hp-res-grid${!homeFetchDone ? ' hp-data-loading' : ''}`} aria-busy={!homeFetchDone || undefined}>
+          {!homeFetchDone ? (
+            [0, 1, 2, 3].map((i) => (
+              <div key={i} className="hp-res-card hp-col-card--skeleton">
+                <div className="hp-skel-line hp-skel-line--sm" />
+                <div className="hp-skel-line" />
+                <div className="hp-skel-line hp-skel-line--xs" />
+              </div>
+            ))
+          ) : ontologyBlock?.data?.length > 0 ? (
+            ontologyBlock.data.slice(0, 4).map((raw, i) => {
+              const r = mapOntologyRowToResource(raw, i)
+              return (
+                <div key={r.document_id || i} className="hp-res-card" onClick={() => setSelectedResource(r)}>
+                  <div className="tag">{r.type || 'Document'}</div>
+                  <div className="ti">{r.title}</div>
+                  <div className="ct">{r.author || r.publisher || 'Unknown'}</div>
+                </div>
+              )
+            })
+          ) : (
+            <div className="hp-res-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#5a7aa0' }}>
+              No resources available at the moment.
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* CURATED COLLECTIONS */}
       <section className="hp-collections" id="hp-section-collections">
         <div className="hp-col-h">
@@ -1018,21 +1061,21 @@ export function PublicHomePage() {
         <div className={`hp-col-grid${!homeFetchDone ? ' hp-data-loading' : ''}`} aria-busy={!homeFetchDone || undefined}>
           {!homeFetchDone
             ? [0, 1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="hp-col-card hp-col-card--skeleton">
-                  <div className="hp-skel-line hp-skel-line--sm" />
-                  <div className="hp-skel-line" />
-                  <div className="hp-skel-line hp-skel-line--xs" />
-                </div>
-              ))
+              <div key={i} className="hp-col-card hp-col-card--skeleton">
+                <div className="hp-skel-line hp-skel-line--sm" />
+                <div className="hp-skel-line" />
+                <div className="hp-skel-line hp-skel-line--xs" />
+              </div>
+            ))
             : collectionCards.map((c, i) => (
-                <button key={c.key ?? i} type="button" className={`hp-col-card ${c.cls}`} onClick={() => navigateLoginNext(navigate, '/dashboard/collections')}>
-                  <div>
-                    <div className="tag">{c.tag}</div>
-                    <div className="ti">{c.ti}</div>
-                  </div>
-                  <div className="ct">{c.ct}</div>
-                </button>
-              ))}
+              <button key={c.key ?? i} type="button" className={`hp-col-card ${c.cls}`} onClick={() => navigateLoginNext(navigate, '/dashboard/collections')}>
+                <div>
+                  <div className="tag">{c.tag}</div>
+                  <div className="ti">{c.ti}</div>
+                </div>
+                <div className="ct">{c.ct}</div>
+              </button>
+            ))}
         </div>
       </section>
 
@@ -1099,6 +1142,8 @@ export function PublicHomePage() {
       </div>
 
       <AiAssistantDock variant="public" />
-    </div>
+      </div>
+      <ResourceDetailModal resource={selectedResource} onClose={() => setSelectedResource(null)} />
+    </>
   )
 }
