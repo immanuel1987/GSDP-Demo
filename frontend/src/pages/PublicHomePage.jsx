@@ -147,7 +147,7 @@ function HeroSlider({ slides: slidesProp, loading }) {
   const resetTimer = useCallback(() => {
     clearInterval(timerRef.current)
     if (loading || slideCount < 2) return
-    timerRef.current = setInterval(() => go(), 6500)
+    timerRef.current = setInterval(() => go(), 5000)
   }, [go, loading, slideCount])
 
   useEffect(() => {
