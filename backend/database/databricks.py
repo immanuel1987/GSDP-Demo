@@ -2,7 +2,7 @@ import os
 import re
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Tuple
 
 from databricks import sql
 from dotenv import load_dotenv
@@ -15,6 +15,10 @@ DATABRICKS_ACCESS_TOKEN = os.getenv("DATABRICKS_ACCESS_TOKEN")
 
 ONTOLOGY_TABLE = "ontology.bronze.final_table_ontology"
 RESOURCE_EXCEL_TABLE = "ontology.silver.resource_final_excel_driven"
+ONTOLOGY_MAPPED_VALUE_DEDUP_TABLE = "ontology.silver.ontology_mapped_value_deduplicated"
+
+# Cached (name, dtype lower) rows from DESCRIBE — refreshed on process restart only.
+_mapped_value_dedup_schema_cache: Optional[Tuple[list[str], list[str]]] = None
 
 
 # Subset used by the dashboard Resource Library (avoids huge SELECT * payloads).
@@ -129,6 +133,59 @@ def _row_to_dict(columns, row):
     for col, val in zip(columns, row):
         out[col] = _serialize_value(val)
     return out
+
+
+def _quote_sql_ident(name: str) -> str:
+    """Spark / Unity Catalog: backtick-escape identifier."""
+    n = (name or "").replace("`", "")
+    return f"`{n}`"
+
+
+def _load_mapped_value_dedup_schema(cursor) -> Tuple[list[str], list[str]]:
+    """
+    Return (all_column_names, string_like_column_names) for ontology_mapped_value_deduplicated.
+    Used for ORDER BY and optional text search.
+    """
+    global _mapped_value_dedup_schema_cache
+    if _mapped_value_dedup_schema_cache is not None:
+        return _mapped_value_dedup_schema_cache
+
+    cursor.execute(f"DESCRIBE TABLE {ONTOLOGY_MAPPED_VALUE_DEDUP_TABLE}")
+    rows = cursor.fetchall()
+    all_cols: list[str] = []
+    text_cols: list[str] = []
+    for row in rows:
+        if not row:
+            continue
+        col_name = row[0]
+        if col_name is None:
+            continue
+        name = str(col_name).strip()
+        if not name or name.startswith("#"):
+            continue
+        dtype = str(row[1] or "").lower()
+        all_cols.append(name)
+        if any(t in dtype for t in ("string", "varchar", "char", "text")):
+            text_cols.append(name)
+    text_cols = text_cols[:20]
+    _mapped_value_dedup_schema_cache = (all_cols, text_cols)
+    return _mapped_value_dedup_schema_cache
+
+
+def _pick_order_column(all_cols: list[str]) -> Optional[str]:
+    for prefer in (
+        "ingestion_time",
+        "updated_at",
+        "last_modified",
+        "_commit_timestamp",
+        "dateLastUpdated",
+        "dateCreated",
+        "date_created",
+    ):
+        for c in all_cols:
+            if c.lower() == prefer.lower():
+                return c
+    return all_cols[0] if all_cols else None
 
 
 def _sanitize_search(q: str) -> str:
@@ -249,6 +306,63 @@ def query_resource_excel_table(limit: int = 100, offset: int = 0, search: Option
     finally:
         connection.close()
 
+
+def query_ontology_mapped_value_deduplicated_table(
+    limit: int,
+    offset: int = 0,
+    search: Optional[str] = None,
+):
+    """
+    Paginated rows from ontology.silver.ontology_mapped_value_deduplicated.
+    Uses DESCRIBE (cached) to pick ORDER BY and optional LIKE search across string-like columns.
+    """
+    limit = int(limit)
+    offset = int(offset)
+    base_from = f"FROM {ONTOLOGY_MAPPED_VALUE_DEDUP_TABLE}"
+
+    connection = get_databricks_connection()
+    try:
+        with connection.cursor() as cursor:
+            all_cols, text_cols = _load_mapped_value_dedup_schema(cursor)
+            order_col = _pick_order_column(all_cols)
+            order_sql = f"{_quote_sql_ident(order_col)} DESC NULLS LAST" if order_col else "1"
+
+            q_clean = _sanitize_search(search) if search else ""
+            if q_clean and text_cols:
+                pat = f"%{q_clean}%"
+                or_parts = [f"lower(cast({_quote_sql_ident(c)} as string)) like lower(?)" for c in text_cols]
+                where = "WHERE (" + " OR ".join(or_parts) + ")"
+                params = (pat,) * len(text_cols)
+
+                count_sql = f"SELECT COUNT(*) AS c {base_from} {where}"
+                cursor.execute(count_sql, params)
+                total = int(cursor.fetchone()[0])
+
+                data_sql = (
+                    f"SELECT * {base_from} {where} ORDER BY {order_sql} LIMIT {limit} OFFSET {offset}"
+                )
+                cursor.execute(data_sql, params)
+            elif q_clean and not text_cols:
+                # Search requested but no string-like columns in catalog — return unfiltered page.
+                count_sql = f"SELECT COUNT(*) AS c {base_from}"
+                cursor.execute(count_sql)
+                total = int(cursor.fetchone()[0])
+                data_sql = f"SELECT * {base_from} ORDER BY {order_sql} LIMIT {limit} OFFSET {offset}"
+                cursor.execute(data_sql)
+            else:
+                count_sql = f"SELECT COUNT(*) AS c {base_from}"
+                cursor.execute(count_sql)
+                total = int(cursor.fetchone()[0])
+
+                data_sql = f"SELECT * {base_from} ORDER BY {order_sql} LIMIT {limit} OFFSET {offset}"
+                cursor.execute(data_sql)
+
+            rows = cursor.fetchall()
+            columns = [column[0] for column in cursor.description]
+            data = [_row_to_dict(columns, row) for row in rows]
+            return {"data": data, "total": total}
+    finally:
+        connection.close()
 
 
 def query_ontology_summary():

@@ -3,22 +3,29 @@ import { Link, useLocation } from 'react-router-dom'
 import { getSession } from '../../auth/session'
 import { allowedPageIdsForRoleKey } from '../../data/dashboardNav'
 import { ROLE_DISPLAY } from '../../data/dashboardRoles'
-import { ANALYTICS_PROVINCE_DATA } from '../../data/analyticsProvinceData'
 import { dashboardRoleKeyFromRoleName } from '../../auth/loginSession'
+import { PastoralWorksMap } from '../../components/maps/PastoralWorksMap.jsx'
 import { clearRoleAllowedPagesOverride, fetchAuthRoles, updateRoleAllowedPages } from '../../lib/authApi'
 import {
+  buildAnalyticsKnowledgeNetworkBars,
+  buildAnalyticsProvinceRollupFromOntologyRows,
+  buildDashboardCollectionTiles,
+  buildDashboardEventsFromOntologyRows,
+  buildDashboardInstitutionsFromOntologyRows,
+  buildDashboardPersonsFromOntologyRows,
+  buildNetworkKpisFromOntologyRows,
+  buildNetworkProvincesFromOntologyRows,
+  buildNetworkRegionalFromOntologyRows,
+  buildNetworkWayPillsFromOntologyRows,
   fetchOntologyRows,
   fetchOntologySummary,
+  formatOntologyFreshness,
   mapOntologyRowToResource,
   resourceDocumentKind,
   resourceDocumentUrl,
 } from '../../lib/ontologyApi'
 import {
   COLLECTION_CHIPS,
-  DASHBOARD_COLLECTIONS,
-  DASHBOARD_EVENTS,
-  DASHBOARD_INSTITUTIONS,
-  DASHBOARD_PERSONS,
   DASHBOARD_RESOURCES,
   INSTITUTION_TYPE_OPTIONS,
   RESOURCE_AUTHORS,
@@ -216,6 +223,7 @@ export function ResourcesView() {
 
 
   const [apiRows, setApiRows] = useState([])
+  const [apiTotal, setApiTotal] = useState(null)
   const [apiLoading, setApiLoading] = useState(true)
   const [apiError, setApiError] = useState(null)
   const [useStaticFallback, setUseStaticFallback] = useState(false)
@@ -249,6 +257,7 @@ export function ResourcesView() {
         if (cancelled) return
         const mapped = (res.data || []).map((row, i) => mapOntologyRowToResource(row, i))
         setApiRows(mapped)
+        setApiTotal(typeof res.total === 'number' ? res.total : null)
       })
       .catch((e) => {
         if (!cancelled) setApiError(e instanceof Error ? e.message : String(e))
@@ -292,7 +301,7 @@ export function ResourcesView() {
         subtitle={
           useStaticFallback
             ? 'Browse, search, and access the Salesian knowledge corpus (offline sample data)'
-            : 'Live records from ontology.bronze.final_table_ontology via the platform API'
+            : 'Browse and search live resources from the platform library'
         }
       >
         {apiError ? (
@@ -303,7 +312,8 @@ export function ResourcesView() {
         ) : null}
         {!useStaticFallback && !apiLoading && !apiError ? (
           <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900">
-            Databricks · {apiRows.length} shown
+            Live · {apiRows.length} shown
+            {apiTotal != null ? ` · ${apiTotal.toLocaleString()} total` : ''}
           </span>
         ) : null}
         <button
@@ -454,14 +464,14 @@ export function ResourcesView() {
       {apiLoading ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-border-sdb bg-white py-16 text-center">
           <div className="mb-2 text-2xl">⏳</div>
-          <div className="font-serif text-lg font-bold text-sdb-blue-deep">Loading ontology records…</div>
-          <p className="mt-1 max-w-md text-sm text-mid">Fetching from /data/ontology (Databricks bronze table).</p>
+          <div className="font-serif text-lg font-bold text-sdb-blue-deep">Loading resources…</div>
+          <p className="mt-1 max-w-md text-sm text-mid">Please wait while the library loads.</p>
         </div>
       ) : apiError && !useStaticFallback ? (
         <EmptyState
           icon="⚠️"
           title="Could not load live data"
-          msg={`Check that the backend is running and Databricks credentials are set (.env). ${apiError}`}
+          msg={`Check that the backend is running and try again. ${apiError}`}
         />
       ) : !filtered.length ? (
         <EmptyState
@@ -552,28 +562,87 @@ export function ResourcesView() {
 export function CollectionsView() {
   const [chip, setChip] = useState('')
   const [q, setQ] = useState('')
+  const [ontologyTiles, setOntologyTiles] = useState(null)
+  const [collectionsLoading, setCollectionsLoading] = useState(true)
+  const [collectionsErr, setCollectionsErr] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const startId = window.setTimeout(() => {
+      if (cancelled) return
+      setCollectionsLoading(true)
+      setCollectionsErr(null)
+      fetchOntologyRows({ limit: 200, offset: 0 })
+        .then((res) => {
+          if (cancelled) return
+          const rows = res?.data || []
+          setOntologyTiles(buildDashboardCollectionTiles(rows, { limit: 14 }))
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setCollectionsErr(e instanceof Error ? e.message : String(e))
+            setOntologyTiles(null)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setCollectionsLoading(false)
+        })
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(startId)
+    }
+  }, [])
+
+  const sourceCollections = useMemo(() => {
+    if (collectionsLoading) return []
+    return Array.isArray(ontologyTiles) ? ontologyTiles : []
+  }, [collectionsLoading, ontologyTiles])
+
+  const chipOptions = useMemo(() => {
+    const fromTiles = [...new Set(sourceCollections.map((c) => c.chip).filter(Boolean))]
+    const merged = [...new Set([...COLLECTION_CHIPS.filter(Boolean), ...fromTiles])]
+    return ['', ...merged]
+  }, [sourceCollections])
 
   const filtered = useMemo(() => {
     const cq = q.trim().toLowerCase()
-    return DASHBOARD_COLLECTIONS.filter(
+    return sourceCollections.filter(
       (c) =>
-        (!cq || c.title.toLowerCase().includes(cq) || c.desc.toLowerCase().includes(cq)) && (!chip || c.chip === chip),
+        (!cq ||
+          c.title.toLowerCase().includes(cq) ||
+          String(c.desc || '')
+            .toLowerCase()
+            .includes(cq)) &&
+        (!chip || c.chip === chip),
     )
-  }, [chip, q])
+  }, [chip, q, sourceCollections])
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Collections"
-        subtitle="Curated thematic knowledge paths — discover without needing an exact query"
+        subtitle={
+          collectionsLoading
+            ? 'Loading collection groups…'
+            : ontologyTiles && ontologyTiles.length > 0
+              ? 'Thematic clusters from your latest library data (refreshed on each visit)'
+              : 'No clusters matched the current filters. Try again later.'
+        }
       >
         <button type="button" className="rounded-lg bg-sdb-blue px-3 py-1.5 text-xs font-semibold text-white">
           + New Collection
         </button>
       </SectionHeader>
+      {collectionsErr ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+          Collections API: {collectionsErr.slice(0, 140)}
+          {collectionsErr.length > 140 ? '…' : ''}
+        </div>
+      ) : null}
       <FilterBar>
         <select className={sel} value={chip} onChange={(e) => setChip(e.target.value)}>
-          {COLLECTION_CHIPS.map((c) => (
+          {chipOptions.map((c) => (
             <option key={c || 'all'} value={c}>
               {c ? c : 'All categories'}
             </option>
@@ -596,11 +665,32 @@ export function CollectionsView() {
           Clear
         </button>
       </FilterBar>
-      {!filtered.length ? (
+      {collectionsLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div
+              key={i}
+              className="overflow-hidden rounded-xl border border-dashed border-border-sdb bg-white shadow-sm"
+            >
+              <div className="h-[90px] animate-pulse bg-slate-200/80" />
+              <div className="space-y-2 p-3.5">
+                <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
+                <div className="h-4 w-full max-w-[200px] animate-pulse rounded bg-slate-200" />
+                <div className="h-3 w-full animate-pulse rounded bg-slate-200" />
+                <div className="h-3 w-2/3 animate-pulse rounded bg-slate-200" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : !filtered.length ? (
         <EmptyState
           icon="🗂"
-          title="No collections found"
-          msg="Try adjusting your search or category filter."
+          title={collectionsErr ? 'Could not load collections' : 'No collections found'}
+          msg={
+            collectionsErr
+              ? 'Fix the API connection and refresh. Static demo tiles are not shown.'
+              : 'Try adjusting your search or category filter.'
+          }
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -632,6 +722,9 @@ export function InstitutionsView() {
   const [fProvince, setFProvince] = useState('')
   const [fRegion, setFRegion] = useState('')
   const [q, setQ] = useState('')
+  const [ontologyInstitutions, setOntologyInstitutions] = useState(null)
+  const [instLoading, setInstLoading] = useState(true)
+  const [instErr, setInstErr] = useState(null)
 
   useEffect(() => {
     const s = getSession()
@@ -646,9 +739,42 @@ export function InstitutionsView() {
     })
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    const startId = window.setTimeout(() => {
+      if (cancelled) return
+      setInstLoading(true)
+      setInstErr(null)
+      fetchOntologyRows({ limit: 220, offset: 0 })
+        .then((res) => {
+          if (cancelled) return
+          const rows = res?.data || []
+          setOntologyInstitutions(buildDashboardInstitutionsFromOntologyRows(rows, { limit: 60 }))
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setInstErr(e instanceof Error ? e.message : String(e))
+            setOntologyInstitutions(null)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setInstLoading(false)
+        })
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(startId)
+    }
+  }, [])
+
+  const sourceInstitutions = useMemo(() => {
+    if (instLoading) return []
+    return Array.isArray(ontologyInstitutions) ? ontologyInstitutions : []
+  }, [instLoading, ontologyInstitutions])
+
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase()
-    return DASHBOARD_INSTITUTIONS.filter((i) => {
+    return sourceInstitutions.filter((i) => {
       if (
         qq &&
         !i.name.toLowerCase().includes(qq) &&
@@ -663,14 +789,26 @@ export function InstitutionsView() {
       if (fRegion && i.region !== fRegion) return false
       return true
     })
-  }, [fType, fProvince, fRegion, q])
+  }, [fType, fProvince, fRegion, q, sourceInstitutions])
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Pastoral Works"
-        subtitle="CristO–Religio linked institutional map across 92 provinces · 7,240 works in 136 nations"
+        subtitle={
+          instLoading
+            ? 'Loading institutions…'
+            : ontologyInstitutions && ontologyInstitutions.length > 0
+              ? 'Workplaces and pastoral sites from live library metadata (schools, centres, provinces, social works)'
+              : 'No institutions matched the current filters. Try again later.'
+        }
       />
+      {instErr ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+          Pastoral Works API: {instErr.slice(0, 140)}
+          {instErr.length > 140 ? '…' : ''}
+        </div>
+      ) : null}
       <FilterBar>
         <select className={sel} value={fType} onChange={(e) => setFType(e.target.value)}>
           {INSTITUTION_TYPE_OPTIONS.map((o) => (
@@ -711,7 +849,7 @@ export function InstitutionsView() {
           Clear
         </button>
       </FilterBar>
-      <div className="overflow-x-auto rounded-xl border border-border-sdb bg-white">
+      <div className="overflow-x-auto rounded-xl border border-border-sdb bg-white" aria-busy={instLoading || undefined}>
         <table className="w-full min-w-[760px] border-collapse text-left">
           <thead>
             <tr className="border-b-2 border-sdb-blue-light bg-sdb-blue-pale">
@@ -733,12 +871,45 @@ export function InstitutionsView() {
             </tr>
           </thead>
           <tbody>
-            {!filtered.length ? (
+            {instLoading ? (
+              [0, 1, 2, 3, 4, 5, 6, 7].map((sk) => (
+                <tr key={sk} className="border-b border-border-sdb last:border-0">
+                  <td className="px-3.5 py-3">
+                    <div className="h-4 w-48 animate-pulse rounded bg-slate-200" />
+                    <div className="mt-2 h-3 w-full max-w-xs animate-pulse rounded bg-slate-100" />
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <div className="h-5 w-16 animate-pulse rounded bg-slate-200" />
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <div className="h-5 w-20 animate-pulse rounded bg-slate-100" />
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <div className="h-3 w-32 animate-pulse rounded bg-slate-200" />
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <div className="h-3 w-14 animate-pulse rounded bg-slate-200" />
+                  </td>
+                  <td className="px-3.5 py-3">
+                    <div className="h-6 w-16 animate-pulse rounded-full bg-slate-100" />
+                  </td>
+                </tr>
+              ))
+            ) : !filtered.length ? (
               <tr>
                 <td colSpan={7} className="p-10 text-center">
                   <div className="text-3xl">🏛</div>
-                  <div className="mt-2 font-serif font-bold text-sdb-blue-deep">No institutions found</div>
-                  <p className="mt-1 text-sm text-mid">Try adjusting province or type filters.</p>
+                  <div className="mt-2 font-serif font-bold text-sdb-blue-deep">
+                    {instErr ? 'Could not load pastoral works' : 'No institutions found'}
+                  </div>
+                  <p className="mt-1 text-sm text-mid">
+                    {instErr
+                      ? 'Fix the API connection and refresh. Static demo rows are not shown.'
+                      : 'Try adjusting province or type filters.'}
+                  </p>
                 </td>
               </tr>
             ) : (
@@ -770,9 +941,18 @@ export function InstitutionsView() {
                   </td>
                   <td className="px-3.5 py-3 text-xs">{i.country}</td>
                   <td className="px-3.5 py-3">
-                    {i.url ? (
+                    {i.urlHref ? (
                       <a
-                        href={`https://${i.url}`}
+                        href={i.urlHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-semibold text-orange-text no-underline"
+                      >
+                        {i.url || 'Link'} ↗
+                      </a>
+                    ) : i.url ? (
+                      <a
+                        href={String(i.url).startsWith('http') ? i.url : `https://${i.url}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] font-semibold text-orange-text no-underline"
@@ -794,60 +974,18 @@ export function InstitutionsView() {
           </tbody>
         </table>
       </div>
-      <div className="mt-4 rounded-xl border border-border-sdb bg-white">
-        <div className="flex items-center justify-between border-b border-border-sdb px-3 py-2">
-          <span className="text-sm font-semibold text-sdb-blue-deep">🗺 South Asia — Institution Map</span>
-          <span className="rounded-full bg-sdb-blue-pale px-2 py-0.5 text-[10px] font-bold text-sdb-blue-deep">
-            Click a marker
+      <div className="mt-4 overflow-hidden rounded-xl border border-border-sdb bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-sdb px-3 py-2.5">
+          <span className="text-sm font-semibold text-sdb-blue-deep">🗺 South Asia — live institution map</span>
+          <span className="rounded-full bg-sdb-blue-pale px-2.5 py-0.5 text-[10px] font-bold text-sdb-blue-deep">
+            {instLoading ? 'Loading…' : 'Hover or click pins · use South Asia view to reset the map'}
           </span>
         </div>
-        <div
-          className="flex h-52 items-center justify-center text-sm text-mid"
-          style={{ background: 'linear-gradient(160deg,#EEF5FC 0%,#D6E8F7 100%)' }}
-        >
-          Interactive map (reference HTML SVG markers: INK, INM, INH…)
-        </div>
+        <PastoralWorksMap institutions={filtered} loading={instLoading} />
       </div>
     </main>
   )
 }
-
-const NETWORKS_KPI_STRIP = [
-  { orangeTop: true, icon: '🏫', iconBg: '#FEF3C7', value: '261', label: 'Schools' },
-  { orangeTop: false, icon: '🎓', iconBg: '#D1FAE5', value: '51', label: 'Colleges' },
-  { orangeTop: false, icon: '🔧', iconBg: '#E8F0FA', value: '138', label: 'Technical Institutes' },
-  { orangeTop: true, icon: '🛡', iconBg: '#FEF3C7', value: '174', label: 'YaR Centres' },
-  { orangeTop: false, icon: '🏠', iconBg: '#D1FAE5', value: '192', label: 'Hostels' },
-]
-
-const NETWORKS_PROVINCES = [
-  { code: 'INK', name: 'Bangalore Province', toast: 'Bangalore (INK) — Fr. Jose Koyickal · Education & Culture' },
-  { code: 'INM', name: 'Chennai Province', toast: 'Chennai (INM) — Fr. Don Bosco Lourdusamy · DBYA' },
-  { code: 'IND', name: 'Dimapur Province', toast: 'Dimapur (IND) — Fr. Joseph Pampackal · Missions' },
-  { code: 'ING', name: 'Guwahati Province', toast: 'Guwahati (ING) — Fr. Sebastian Kuricheal · Schools' },
-  { code: 'INH', name: 'Hyderabad Province', toast: 'Hyderabad (INH) — Fr. Thomas Santhiagu · YaR' },
-  { code: 'INC', name: 'Kolkata Province', toast: 'Kolkata (INC) — Fr. Sunil Kerketta · Salesian Family' },
-  { code: 'INB', name: 'Mumbai Province', toast: 'Mumbai (INB) — Fr. Ashley Miranda · BOSCOM' },
-  { code: 'INN', name: 'New Delhi Province', toast: 'New Delhi (INN) — Fr. Davis Maniparamben · DB Tech' },
-  { code: 'INP', name: 'Panjim Province', toast: 'Panjim (INP) — Fr. Clive Justin Telles · Bosconet' },
-  { code: 'INS', name: 'Shillong Province', toast: 'Shillong (INS) — Fr. John Zosiama · Formation' },
-  { code: 'INT', name: 'Tiruchy Province', toast: 'Tiruchy (INT) — Fr. Doss Kennedy · Vocational' },
-  { code: 'LKC', name: 'Sri Lanka Vice Province', toast: 'Sri Lanka (LKC) — Fr. Roshan Miranda' },
-]
-
-const NETWORKS_REGIONAL = [
-  { dot: '#004A99', label: 'Don Bosco Youth Animation (DBYA)', toast: 'Don Bosco Youth Animation (DBYA) · coordinated by INM' },
-  { dot: '#004A99', label: 'Don Bosco Schools (AIDBES)', toast: 'Don Bosco Schools / AIDBES · 261 schools · INK' },
-  { dot: '#1F6EB8', label: 'DB Higher Education India (DBHEI)', toast: 'DB Higher Education India (DBHEI) · 51 colleges · INK' },
-  { dot: '#1A6B3C', label: 'Child Friendly Cities (CFCI)', toast: 'Child Friendly Cities Initiative (CFCI)' },
-  { dot: '#B86218', label: 'Young at Risk Forum (DB YaR)', toast: 'Young at Risk Forum India (DB YaR) · 174 centres · INH' },
-  { dot: '#7A5000', label: 'DB Job Placement Network (JPN)', toast: 'Don Bosco Job Placement Network (JPN) · donboscojobs.org' },
-  { dot: '#004A99', label: 'Don Bosco Tech (DB Tech)', toast: 'Don Bosco Tech (DB Tech) · 138 institutes · INN · dbtech.in' },
-  { dot: '#2D6A4F', label: 'DB Indigenous Cultures (DBCIC)', toast: 'DB Centre for Indigenous Cultures (DBCIC) · dbcic.org' },
-  { dot: '#5B21B6', label: 'Don Bosco Renewal Centre (DBYP)', toast: 'Don Bosco Renewal Centre (DBYP)' },
-  { dot: '#003559', label: 'Don Bosco Network (Bosconet)', toast: 'Don Bosco Network (Bosconet) · bosconet.in · INP' },
-  { dot: '#003559', label: 'DB Communications (BOSCOM)', toast: 'Don Bosco Communications (BOSCOM) · South Asia · INB' },
-]
 
 const NETWORKS_GLOBAL_LINKS = [
   { href: 'https://www.sdb.org/en', dot: '#004A99', label: 'Salesian Worldwide (sdb.org)' },
@@ -858,19 +996,39 @@ const NETWORKS_GLOBAL_LINKS = [
   { href: 'https://www.donboscosouthasia.org', dot: '#003559', label: 'Don Bosco South Asia Portal' },
 ]
 
-const NETWORKS_WAY_PILLS = [
-  { t: '🎓 We Form', toast: 'We Form — 57 Formation Centres' },
-  { t: '🏫 We Educate', toast: 'We Educate — 261 Schools' },
-  { t: '🔧 We Skill', toast: 'We Skill — 138 Technical Institutes' },
-  { t: '🛡 We Care', toast: 'We Care — 174 YaR Centres' },
-  { t: '🌱 We Develop', toast: 'We Develop — 13 PDO Centres' },
-  { t: '📡 We Communicate', toast: 'We Communicate — 18 BOSCOM Centres' },
-  { t: '🏠 We Host', toast: 'We Host — 192 Hostels' },
-  { t: '⛪ We Shepherd', toast: 'We Shepherd — 174 Parishes' },
-]
-
 export function NetworksView() {
   const [toast, setToast] = useState('')
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [netErr, setNetErr] = useState(null)
+
+  const kpis = useMemo(() => buildNetworkKpisFromOntologyRows(rows), [rows])
+  const provinces = useMemo(() => buildNetworkProvincesFromOntologyRows(rows, { limit: 14 }), [rows])
+  const regional = useMemo(() => buildNetworkRegionalFromOntologyRows(rows, { limit: 12 }), [rows])
+  const wayPills = useMemo(() => buildNetworkWayPillsFromOntologyRows(rows, { limit: 8 }), [rows])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setNetErr(null)
+    fetchOntologyRows({ limit: 280, offset: 0 })
+      .then((res) => {
+        if (cancelled) return
+        setRows(Array.isArray(res?.data) ? res.data : [])
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setNetErr(e instanceof Error ? e.message : String(e))
+          setRows([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -891,75 +1049,121 @@ export function NetworksView() {
       ) : null}
       <SectionHeader
         title="Salesian Networks"
-        subtitle="Provincial, regional, and global network directory — South Asia"
+        subtitle={
+          loading
+            ? 'Loading network metrics…'
+            : netErr
+              ? 'Library data could not be loaded — global links below are still available.'
+              : 'Provinces, themes, and KPIs from live library rows (indicative, not official statistics).'
+        }
       />
+      {netErr ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+          Networks data: {netErr.slice(0, 160)}
+          {netErr.length > 160 ? '…' : ''}
+        </div>
+      ) : null}
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {NETWORKS_KPI_STRIP.map((k) => (
-          <div
-            key={k.label}
-            className={[
-              'rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm',
-              k.orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light',
-            ].join(' ')}
-          >
-            <div className="mb-2.5 flex items-start">
-              <div
-                className="flex size-9 items-center justify-center rounded-lg text-base"
-                style={{ background: k.iconBg }}
-              >
-                {k.icon}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-busy={loading || undefined}>
+        {loading
+          ? [0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="rounded-xl border border-dashed border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm">
+                <div className="mb-2.5 h-9 w-9 animate-pulse rounded-lg bg-slate-200" />
+                <div className="h-8 w-16 animate-pulse rounded bg-slate-200" />
+                <div className="mt-2 h-3 w-28 animate-pulse rounded bg-slate-100" />
               </div>
-            </div>
-            <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{k.value}</div>
-            <div className="mt-1 text-xs text-mid">{k.label}</div>
-          </div>
-        ))}
+            ))
+          : kpis.map((k) => (
+              <div
+                key={k.label}
+                className={[
+                  'rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm',
+                  k.orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light',
+                ].join(' ')}
+              >
+                <div className="mb-2.5 flex items-start">
+                  <div
+                    className="flex size-9 items-center justify-center rounded-lg text-base"
+                    style={{ background: k.iconBg }}
+                  >
+                    {k.icon}
+                  </div>
+                </div>
+                <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{k.value}</div>
+                <div className="mt-1 text-xs text-mid">{k.label}</div>
+              </div>
+            ))}
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-border-sdb px-4 py-2.5">
-            <span className="text-sm font-semibold text-sdb-blue-deep">🗺 South Asia Provinces</span>
+            <span className="text-sm font-semibold text-sdb-blue-deep">🗺 Provinces</span>
             <Link to="/dashboard/persons" className="text-[11px] font-semibold text-orange-text no-underline hover:underline">
               Meet Provincials →
             </Link>
           </div>
           <div className="flex flex-col gap-1 p-3">
-            {NETWORKS_PROVINCES.map((p) => (
-              <button
-                key={p.code}
-                type="button"
-                className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-sdb-blue-pale"
-                onClick={() => showToast(p.toast)}
-              >
-                <span className="min-w-[36px] shrink-0 rounded bg-sdb-blue px-[7px] py-0.5 text-center text-[11px] font-bold text-white">
-                  {p.code}
-                </span>
-                <span className="min-w-0 flex-1">{p.name}</span>
-                <span className="shrink-0 text-[13px] text-mid">→</span>
-              </button>
-            ))}
+            {loading ? (
+              <div className="space-y-2" aria-busy="true">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2">
+                    <div className="h-7 w-10 shrink-0 animate-pulse rounded bg-slate-200" />
+                    <div className="h-4 min-w-0 flex-1 animate-pulse rounded bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            ) : provinces.length ? (
+              provinces.map((p) => (
+                <button
+                  key={`${p.code}-${p.name}`}
+                  type="button"
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-sdb-blue-pale"
+                  onClick={() => showToast(p.toast)}
+                >
+                  <span className="min-w-[36px] shrink-0 rounded bg-sdb-blue px-[7px] py-0.5 text-center text-[11px] font-bold text-white">
+                    {p.code}
+                  </span>
+                  <span className="min-w-0 flex-1">{p.name}</span>
+                  <span className="shrink-0 text-[13px] text-mid">→</span>
+                </button>
+              ))
+            ) : (
+              <div className="px-2 py-6 text-center text-sm text-mid">No province-tagged rows in this data slice.</div>
+            )}
           </div>
         </div>
 
         <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
           <div className="border-b border-border-sdb px-4 py-2.5 text-sm font-semibold text-sdb-blue-deep">
-            🔗 Regional Networks
+            🔗 Top themes
           </div>
           <div className="flex flex-col gap-1 p-3">
-            {NETWORKS_REGIONAL.map((r) => (
-              <button
-                key={r.label}
-                type="button"
-                className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-sdb-blue-pale"
-                onClick={() => showToast(r.toast)}
-              >
-                <span className="size-[9px] shrink-0 rounded-full" style={{ background: r.dot }} />
-                <span className="min-w-0 flex-1">{r.label}</span>
-                <span className="shrink-0 text-[13px] text-mid">→</span>
-              </button>
-            ))}
+            {loading ? (
+              <div className="space-y-2" aria-busy="true">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-2.5 rounded-lg px-2.5 py-2">
+                    <div className="size-[9px] shrink-0 animate-pulse rounded-full bg-slate-200" />
+                    <div className="h-4 min-w-0 flex-1 animate-pulse rounded bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            ) : regional.length ? (
+              regional.map((r) => (
+                <button
+                  key={r.label}
+                  type="button"
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] text-ink transition-colors hover:bg-sdb-blue-pale"
+                  onClick={() => showToast(r.toast)}
+                >
+                  <span className="size-[9px] shrink-0 rounded-full" style={{ background: r.dot }} />
+                  <span className="min-w-0 flex-1">{r.label}</span>
+                  <span className="shrink-0 text-[13px] text-mid">→</span>
+                </button>
+              ))
+            ) : (
+              <div className="px-2 py-6 text-center text-sm text-mid">No knowledge-area or category tags in this slice.</div>
+            )}
           </div>
         </div>
 
@@ -987,7 +1191,7 @@ export function NetworksView() {
 
           <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
             <div className="border-b border-border-sdb px-4 py-2.5 text-sm font-semibold text-sdb-blue-deep">
-              ⚡ The Salesian Way
+              ⚡ Top publication lines
             </div>
             <div className="p-3.5">
               <p className="text-[13px] leading-relaxed text-slate-sdb">
@@ -995,16 +1199,24 @@ export function NetworksView() {
                 <strong className="text-ink">Reason, Religion, and Loving-Kindness</strong>.
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {NETWORKS_WAY_PILLS.map((pill) => (
-                  <button
-                    key={pill.t}
-                    type="button"
-                    className="cursor-pointer rounded-lg border border-sdb-blue-light bg-sdb-blue-pale px-2.5 py-2 text-center text-xs font-semibold text-sdb-blue-deep transition-colors hover:border-sdb-blue hover:bg-sdb-blue hover:text-white"
-                    onClick={() => showToast(pill.toast)}
-                  >
-                    {pill.t}
-                  </button>
-                ))}
+                {loading ? (
+                  [0, 1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="h-10 animate-pulse rounded-lg border border-border-sdb bg-slate-100" />
+                  ))
+                ) : wayPills.length ? (
+                  wayPills.map((pill) => (
+                    <button
+                      key={pill.t}
+                      type="button"
+                      className="cursor-pointer rounded-lg border border-sdb-blue-light bg-sdb-blue-pale px-2.5 py-2 text-center text-xs font-semibold text-sdb-blue-deep transition-colors hover:border-sdb-blue hover:bg-sdb-blue hover:text-white"
+                      onClick={() => showToast(pill.toast)}
+                    >
+                      {pill.t}
+                    </button>
+                  ))
+                ) : (
+                  <div className="col-span-2 py-2 text-center text-xs text-mid">No publication-type mix to show.</div>
+                )}
               </div>
             </div>
           </div>
@@ -1015,9 +1227,9 @@ export function NetworksView() {
 }
 
 const EVENT_TYPE_NAMES = ['', 'Congress', 'Retreat', 'Youth Gathering', 'Mission Event']
-const EVENT_REGIONS = ['', 'Europe', 'South Asia', 'Africa', 'Latin America']
+const EVENT_REGIONS = ['', 'Europe', 'South Asia', 'Africa', 'Latin America', 'East Asia']
 const EVENT_GROUPS = ['', 'SDB', 'FMA', 'Cooperators']
-const EVENT_MONTHS = ['', 'Mar', 'Apr', 'May', 'Nov']
+const EVENT_MONTH_OPTIONS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function filterEvents(list, f) {
   const q = f.q.trim().toLowerCase()
@@ -1035,6 +1247,9 @@ function filterEvents(list, f) {
 
 export function EventsView() {
   const [f, setF] = useState({ type: '', region: '', group: '', month: '', q: '' })
+  const [ontologyEvents, setOntologyEvents] = useState(null)
+  const [eventsLoading, setEventsLoading] = useState(true)
+  const [eventsErr, setEventsErr] = useState(null)
 
   useEffect(() => {
     const s = getSession()
@@ -1048,7 +1263,40 @@ export function EventsView() {
     })
   }, [])
 
-  const filtered = useMemo(() => filterEvents(DASHBOARD_EVENTS, f), [f])
+  useEffect(() => {
+    let cancelled = false
+    const startId = window.setTimeout(() => {
+      if (cancelled) return
+      setEventsLoading(true)
+      setEventsErr(null)
+      fetchOntologyRows({ limit: 220, offset: 0 })
+        .then((res) => {
+          if (cancelled) return
+          const rows = res?.data || []
+          setOntologyEvents(buildDashboardEventsFromOntologyRows(rows, { limit: 56 }))
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setEventsErr(e instanceof Error ? e.message : String(e))
+            setOntologyEvents(null)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setEventsLoading(false)
+        })
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(startId)
+    }
+  }, [])
+
+  const sourceEvents = useMemo(() => {
+    if (eventsLoading) return []
+    return Array.isArray(ontologyEvents) ? ontologyEvents : []
+  }, [eventsLoading, ontologyEvents])
+
+  const filtered = useMemo(() => filterEvents(sourceEvents, f), [f, sourceEvents])
 
   const typeBadge = (t) => {
     if (t === 'ev-youth') return 'bg-amber-100 text-amber-900'
@@ -1062,8 +1310,20 @@ export function EventsView() {
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Events"
-        subtitle="ANS-integrated global Salesian calendar — complementary to external platforms"
+        subtitle={
+          eventsLoading
+            ? 'Loading events…'
+            : ontologyEvents && ontologyEvents.length > 0
+              ? 'Gatherings, congresses, and dated activities from library metadata and keywords'
+              : 'No events matched the current filters. Try again later.'
+        }
       />
+      {eventsErr ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+          Events API: {eventsErr.slice(0, 140)}
+          {eventsErr.length > 140 ? '…' : ''}
+        </div>
+      ) : null}
       <FilterBar>
         <select className={sel} value={f.type} onChange={(e) => setF((s) => ({ ...s, type: e.target.value }))}>
           {EVENT_TYPE_NAMES.map((o) => (
@@ -1087,7 +1347,7 @@ export function EventsView() {
           ))}
         </select>
         <select className={sel} value={f.month} onChange={(e) => setF((s) => ({ ...s, month: e.target.value }))}>
-          {EVENT_MONTHS.map((o) => (
+          {EVENT_MONTH_OPTIONS.map((o) => (
             <option key={o || 'allm'} value={o}>
               {o ? `Month: ${o}` : 'All months'}
             </option>
@@ -1103,9 +1363,36 @@ export function EventsView() {
           Clear
         </button>
       </FilterBar>
-      <div className="flex flex-col gap-3">
-        {!filtered.length ? (
-          <EmptyState icon="📅" title="No events found" msg="Try adjusting your filters." />
+      <div className="flex flex-col gap-3" aria-busy={eventsLoading || undefined}>
+        {eventsLoading ? (
+          [0, 1, 2, 3, 4].map((sk) => (
+            <div key={sk} className="flex gap-4 rounded-xl border border-dashed border-border-sdb bg-white p-4 shadow-sm">
+              <div className="w-[52px] shrink-0 rounded-lg bg-slate-100 px-1 py-2">
+                <div className="mx-auto h-7 w-10 animate-pulse rounded bg-slate-200" />
+                <div className="mx-auto mt-2 h-3 w-8 animate-pulse rounded bg-slate-100" />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-5 w-28 animate-pulse rounded-full bg-slate-200" />
+                <div className="h-4 w-full max-w-md animate-pulse rounded bg-slate-200" />
+                <div className="flex gap-3">
+                  <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+                  <div className="h-3 w-20 animate-pulse rounded bg-slate-100" />
+                </div>
+                <div className="h-3 w-full max-w-xl animate-pulse rounded bg-slate-100" />
+                <div className="h-3 w-full max-w-lg animate-pulse rounded bg-slate-100" />
+              </div>
+            </div>
+          ))
+        ) : !filtered.length ? (
+          <EmptyState
+            icon="📅"
+            title={eventsErr ? 'Could not load events' : 'No events found'}
+            msg={
+              eventsErr
+                ? 'Fix the API connection and refresh. Static demo events are not shown.'
+                : 'Try adjusting your filters.'
+            }
+          />
         ) : (
           filtered.map((e) => (
             <div
@@ -1165,6 +1452,9 @@ function filterPersons(list, f) {
 
 export function PersonsView() {
   const [f, setF] = useState({ region: '', province: '', aff: '', vis: '', q: '' })
+  const [ontologyPersons, setOntologyPersons] = useState(null)
+  const [personsLoading, setPersonsLoading] = useState(true)
+  const [personsErr, setPersonsErr] = useState(null)
 
   useEffect(() => {
     const s = getSession()
@@ -1178,14 +1468,59 @@ export function PersonsView() {
     })
   }, [])
 
-  const filtered = useMemo(() => filterPersons(DASHBOARD_PERSONS, f), [f])
+  useEffect(() => {
+    let cancelled = false
+    const startId = window.setTimeout(() => {
+      if (cancelled) return
+      setPersonsLoading(true)
+      setPersonsErr(null)
+      fetchOntologyRows({ limit: 220, offset: 0 })
+        .then((res) => {
+          if (cancelled) return
+          const rows = res?.data || []
+          setOntologyPersons(buildDashboardPersonsFromOntologyRows(rows, { limit: 40 }))
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            setPersonsErr(e instanceof Error ? e.message : String(e))
+            setOntologyPersons(null)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setPersonsLoading(false)
+        })
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(startId)
+    }
+  }, [])
+
+  const sourcePersons = useMemo(() => {
+    if (personsLoading) return []
+    return Array.isArray(ontologyPersons) ? ontologyPersons : []
+  }, [personsLoading, ontologyPersons])
+
+  const filtered = useMemo(() => filterPersons(sourcePersons, f), [f, sourcePersons])
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Persons Directory"
-        subtitle="Salesian scholars, educators, and ministers — public profiles only shown in global search"
+        subtitle={
+          personsLoading
+            ? 'Loading people…'
+            : ontologyPersons && ontologyPersons.length > 0
+              ? 'Authors, confreres, and biography-style records deduped from live metadata'
+              : 'No people matched the current filters. Try again later.'
+        }
       />
+      {personsErr ? (
+        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+          Persons API: {personsErr.slice(0, 140)}
+          {personsErr.length > 140 ? '…' : ''}
+        </div>
+      ) : null}
       <FilterBar>
         <select className={sel} value={f.region} onChange={(e) => setF((s) => ({ ...s, region: e.target.value }))}>
           {PERSON_REGION_OPTS.map((o) => (
@@ -1230,13 +1565,39 @@ export function PersonsView() {
           Clear
         </button>
       </FilterBar>
-      {!filtered.length ? (
-        <EmptyState icon="👥" title="No persons found" msg="Try adjusting filters or search." />
+      {personsLoading ? (
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4" aria-busy="true">
+          {[0, 1, 2, 3, 4, 5, 6, 7].map((sk) => (
+            <div key={sk} className="rounded-xl border border-dashed border-border-sdb bg-white p-[18px] text-center shadow-sm">
+              <div className="mx-auto mb-2.5 size-[46px] animate-pulse rounded-full bg-slate-200" />
+              <div className="mx-auto h-4 w-32 animate-pulse rounded bg-slate-200" />
+              <div className="mx-auto mt-2 h-3 w-40 animate-pulse rounded bg-slate-100" />
+              <div className="mx-auto mt-3 flex justify-center gap-2">
+                <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
+                <div className="h-5 w-14 animate-pulse rounded-full bg-slate-100" />
+              </div>
+              <div className="mx-auto mt-3 flex justify-center gap-4">
+                <div className="h-8 w-12 animate-pulse rounded bg-slate-100" />
+                <div className="h-8 w-12 animate-pulse rounded bg-slate-100" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : !filtered.length ? (
+        <EmptyState
+          icon="👥"
+          title={personsErr ? 'Could not load directory' : 'No persons found'}
+          msg={
+            personsErr
+              ? 'Fix the API connection and refresh. Static demo profiles are not shown.'
+              : 'Try adjusting filters or search.'
+          }
+        />
       ) : (
         <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
           {filtered.map((p) => (
             <div
-              key={p.name}
+              key={p.id || p.name}
               className="cursor-pointer rounded-xl border border-border-sdb bg-white p-[18px] text-center shadow-sm transition-all hover:border-sdb-blue-light hover:shadow-md"
             >
               <div className="mx-auto mb-2.5 flex size-[46px] items-center justify-center rounded-full border-2 border-sdb-blue-light bg-linear-to-br from-sdb-blue to-sdb-blue-mid text-[15px] font-bold text-white">
@@ -1300,7 +1661,7 @@ export function AiView() {
       const responses = [
         `I am analyzing the corpus for information about "${q}". Based on the knowledge graph, there are several key resources in South Asia...`,
         `That's an interesting question about "${q}". I can summarize the related documents for you or translate them if needed.`,
-        `The current ontology contains multiple records related to "${q}". Would you like me to highlight the most relevant ones?`
+        `The library contains several items related to "${q}". Would you like me to highlight the most relevant ones?`
       ]
       const randomResponse = responses[Math.floor(Math.random() * responses.length)]
 
@@ -1429,30 +1790,30 @@ export function OwlView() {
 
   const kpi = sumLoading
     ? [
-      ['🦉', '…', 'Bronze ontology', 'Loading'],
+      ['🦉', '…', 'Knowledge index', 'Loading'],
       ['🏷', '…', 'Total rows', '…'],
-      ['🔗', '…', 'Distinct knowledge areas', '…'],
-      ['🕐', '…', 'Last ingestion / update', '…'],
+      ['🔗', '…', 'Topic areas', '…'],
+      ['🕐', '…', 'Last update', '…'],
     ]
     : sumErr
       ? [
-        ['🦉', '—', 'Bronze ontology', 'Error'],
-        ['⚠️', sumErr.slice(0, 42) + (sumErr.length > 42 ? '…' : ''), 'API detail', 'Fix .env'],
-        ['🔗', '—', 'Distinct knowledge areas', '—'],
-        ['🕐', '—', 'Last ingestion', '—'],
+        ['🦉', '—', 'Knowledge index', 'Error'],
+        ['⚠️', sumErr.slice(0, 42) + (sumErr.length > 42 ? '…' : ''), 'Details', 'Check connection'],
+        ['🔗', '—', 'Topic areas', '—'],
+        ['🕐', '—', 'Last update', '—'],
       ]
       : [
-        ['🦉', 'v3.4.1', 'OWL Version (UI)', 'Live'],
-        ['🏷', totalRows, 'Total bronze rows', 'Databricks'],
-        ['🔗', knowAreas, 'Distinct knowledge areas', 'Taxonomy'],
-        ['🕐', String(lastIngest), 'Last ingestion / update', 'Recent'],
+        ['🦉', 'v3.4.1', 'Schema version (UI)', 'Live'],
+        ['🏷', totalRows, 'Indexed rows', 'Platform'],
+        ['🔗', knowAreas, 'Topic areas', 'Topics'],
+        ['🕐', String(lastIngest), 'Last update', 'Recent'],
       ]
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
-        title="OWL Ontology Update"
-        subtitle="Pipeline controls plus live row counts from ontology.bronze.final_table_ontology"
+        title="Knowledge base sync"
+        subtitle="Pipeline status and live row counts from the search index"
       />
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {kpi.map(([icon, val, lbl, tr], idx) => (
@@ -1468,15 +1829,15 @@ export function OwlView() {
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-border-sdb bg-white p-4">
-          <div className="mb-2 font-semibold text-sdb-blue-deep">⚡ Trigger OWL Update</div>
+          <div className="mb-2 font-semibold text-sdb-blue-deep">⚡ Run full re-index</div>
           <p className="mb-3 text-xs text-mid">
-            Start the OWL ontology regeneration pipeline. All 6 stages run sequentially with real-time status reporting.
+            Starts the knowledge-base refresh pipeline. Stages run in order with status reporting.
           </p>
           <div className="mb-3 rounded border border-border-sdb bg-off-white px-3 py-2 font-mono text-xs text-orange-text">
             POST /api/trigger-owl-update
           </div>
           <button type="button" className="w-full rounded-lg bg-sdb-orange py-3 text-sm font-semibold text-white">
-            🦉 Run OWL Update
+            🦉 Start sync
           </button>
         </div>
         <div className="rounded-xl border border-border-sdb bg-white p-4">
@@ -1493,11 +1854,11 @@ export function OwlView() {
         </div>
         <div className="divide-y divide-border-sdb p-4 text-xs">
           <div>
-            <strong className="text-ink">OWL v3.4.1</strong> — all 6 stages completed · 847 classes · 312 properties
-            <div className="text-mid">2026-03-01 18:42 UTC · paul.dsouza</div>
+            <strong className="text-ink">Index v3.4.1</strong> — all stages completed · 847 classes · 312 properties
+            <div className="text-mid">2026-03-01 18:42 UTC</div>
           </div>
           <div className="pt-3">
-            <strong className="text-ink">OWL v3.4.0</strong> — Province INK taxonomy mappings updated
+            <strong className="text-ink">Index v3.4.0</strong> — Bangalore (INK) taxonomy mappings updated
             <div className="text-mid">2026-02-28 09:15 UTC</div>
           </div>
         </div>
@@ -1556,15 +1917,6 @@ const ANALYTICS_AI_ROWS = [
   ['Summarize', 1124],
   ['Translate', 678],
   ['Recommend', 247],
-]
-
-const ANALYTICS_NETWORK_ROWS = [
-  ['Bosconet NGOs', 350, 350, '#004A99'],
-  ['DB Tech Institutes', 138, 350, '#E67E22'],
-  ['DB Schools', 261, 350, '#1A6B3C'],
-  ['DB Colleges', 51, 350, '#5B21B6'],
-  ['YaR Centres', 174, 350, '#B86218'],
-  ['Parishes', 174, 350, '#2D6A4F'],
 ]
 
 /** Wireframe monthly trend: [month, actual|null, forecast|null] */
@@ -1653,12 +2005,6 @@ function AnalyticsBarChart({ rows }) {
 const ANALYTICS_AREA_BAR_ROWS = barRowsFromMaxTuples(ANALYTICS_AREA_ROWS)
 const ANALYTICS_TYPE_BAR_ROWS = barRowsFromMaxTuples(ANALYTICS_TYPE_ROWS)
 const ANALYTICS_AI_BAR_ROWS = barRowsFromMaxTuples(ANALYTICS_AI_ROWS).map((r) => ({ ...r, barColor: 'var(--color-sdb-orange, #E67E22)' }))
-const ANALYTICS_NETWORK_BAR_ROWS = ANALYTICS_NETWORK_ROWS.map(([label, v, m, c]) => ({
-  label,
-  value: v,
-  widthPct: Math.round((v / m) * 100),
-  barColor: c,
-}))
 
 function AnalyticsStatCard({ orangeTop, icon, iconBg, trend, value, label }) {
   return (
@@ -1704,17 +2050,64 @@ export function AnalyticsView() {
   const [province, setProvince] = useState('all')
   const [area, setArea] = useState('all')
   const [toast, setToast] = useState('')
+  const [ontologyRows, setOntologyRows] = useState([])
+  const [ontologySummary, setOntologySummary] = useState(null)
+  const [ontologyLoaded, setOntologyLoaded] = useState(false)
+  const [ontologyErr, setOntologyErr] = useState(null)
 
-  const provinceFiltered = useMemo(
-    () =>
-      province === 'all' ? ANALYTICS_PROVINCE_DATA : ANALYTICS_PROVINCE_DATA.filter((p) => p.code === province),
-    [province],
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const [ont, sum] = await Promise.all([
+          fetchOntologyRows({ limit: 400, offset: 0 }),
+          fetchOntologySummary().catch(() => null),
+        ])
+        if (cancelled) return
+        setOntologyRows(Array.isArray(ont?.data) ? ont.data : [])
+        setOntologySummary(sum && typeof sum === 'object' ? sum : null)
+      } catch (e) {
+        if (!cancelled) {
+          setOntologyErr(e instanceof Error ? e.message : String(e))
+          setOntologyRows([])
+          setOntologySummary(null)
+        }
+      } finally {
+        if (!cancelled) setOntologyLoaded(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const provinceRollup = useMemo(
+    () => (ontologyLoaded ? buildAnalyticsProvinceRollupFromOntologyRows(ontologyRows) : []),
+    [ontologyLoaded, ontologyRows],
   )
+
+  const provinceSelectOptions = useMemo(() => {
+    const base = [{ value: 'all', label: 'All Provinces' }]
+    if (!provinceRollup.length) return [...base, ...ANALYTICS_PROVINCE_OPTIONS.slice(1)]
+    return [...base, ...provinceRollup.map((p) => ({ value: p.code, label: `${p.code} — ${p.name}` }))]
+  }, [provinceRollup])
+
+  useEffect(() => {
+    if (!ontologyLoaded || province === 'all') return
+    if (!provinceRollup.some((p) => p.code === province)) setProvince('all')
+  }, [ontologyLoaded, provinceRollup, province])
+
+  const provinceFiltered = useMemo(() => {
+    if (!ontologyLoaded) return []
+    if (!provinceRollup.length) return []
+    return province === 'all' ? provinceRollup : provinceRollup.filter((p) => p.code === province)
+  }, [ontologyLoaded, provinceRollup, province])
 
   const provinceBarRows = useMemo(() => {
     const data = provinceFiltered
     if (!data.length) return []
     const maxRes = Math.max(...data.map((p) => p.resources))
+    if (maxRes <= 0) return []
     return data.map((p) => ({
       label: `${p.code} ${p.name}`,
       title: p.fullName,
@@ -1724,10 +2117,25 @@ export function AnalyticsView() {
     }))
   }, [provinceFiltered])
 
-  const deepDiveProvinces = useMemo(
-    () => (province === 'all' ? ANALYTICS_PROVINCE_DATA.slice(0, 6) : provinceFiltered),
-    [province, provinceFiltered],
+  const deepDiveProvinces = useMemo(() => {
+    if (!ontologyLoaded || !provinceRollup.length) return []
+    return province === 'all' ? provinceRollup.slice(0, 6) : provinceFiltered
+  }, [ontologyLoaded, provinceRollup, province, provinceFiltered])
+
+  const networkBarRowsDynamic = useMemo(
+    () => (ontologyLoaded ? buildAnalyticsKnowledgeNetworkBars(ontologyRows, { limit: 8 }) : []),
+    [ontologyLoaded, ontologyRows],
   )
+
+  const nwKpi = useMemo(
+    () => (ontologyLoaded && ontologyRows.length ? buildNetworkKpisFromOntologyRows(ontologyRows) : null),
+    [ontologyLoaded, ontologyRows],
+  )
+
+  const colLabels = useMemo(() => {
+    if (provinceRollup.length && provinceRollup[0].metricLabels) return provinceRollup[0].metricLabels
+    return ['Members', 'Houses', 'Schools', 'Colleges']
+  }, [provinceRollup])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -1740,6 +2148,13 @@ export function AnalyticsView() {
   }
 
   const monthlyMax = 2100
+  const ontologyFresh = formatOntologyFreshness(ontologySummary)
+  const totalResLabel =
+    ontologyLoaded && ontologySummary && typeof ontologySummary.total_rows === 'number'
+      ? ontologySummary.total_rows.toLocaleString()
+      : ontologyLoaded
+        ? ontologyRows.length.toLocaleString()
+        : '…'
 
   return (
     <main id="page-analytics" className="relative min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
@@ -1750,7 +2165,13 @@ export function AnalyticsView() {
       ) : null}
       <SectionHeader
         title="Analytics & Platform Insights"
-        subtitle="AI-powered intelligence · 12 SA provinces · 23 Mar 2026 · Updated every 6 hours"
+        subtitle={
+          !ontologyLoaded
+            ? 'Loading metrics for province cards and network charts…'
+            : ontologyErr
+              ? `Library data unavailable (${ontologyErr.slice(0, 80)}${ontologyErr.length > 80 ? '…' : ''}) — some panels show placeholders.`
+              : `Live sample · ${ontologyRows.length.toLocaleString()} rows · ${ontologyFresh || 'Update time unknown'}`
+        }
       >
         <select className={sel} value={year} onChange={(e) => setYear(e.target.value)}>
           <option value="2026">2026 YTD</option>
@@ -1759,7 +2180,7 @@ export function AnalyticsView() {
           <option value="all">All time</option>
         </select>
         <select className={sel} value={province} onChange={(e) => setProvince(e.target.value)}>
-          {ANALYTICS_PROVINCE_OPTIONS.map((o) => (
+          {provinceSelectOptions.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -1780,28 +2201,58 @@ export function AnalyticsView() {
           ✦ AI Report
         </button>
       </SectionHeader>
+      {ontologyErr ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
+          Province cards and network chart need live library data — request failed: {ontologyErr.slice(0, 160)}
+          {ontologyErr.length > 160 ? '…' : ''}
+        </div>
+      ) : null}
 
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <AnalyticsStatCard
           orangeTop
           icon="📚"
           iconBg="#FEF3C7"
-          trend="+12%"
-          value="12,847"
-          label="Total Resources"
+          trend="Live"
+          value={totalResLabel}
+          label="Total resources"
         />
-        <AnalyticsStatCard icon="🏫" iconBg="#D1FAE5" trend="+2%" value="261" label="DB Schools" />
-        <AnalyticsStatCard icon="🔧" iconBg="#E8F0FA" trend="+5%" value="138" label="Tech Institutes" />
+        <AnalyticsStatCard
+          icon="🏫"
+          iconBg="#D1FAE5"
+          trend="Inferred"
+          value={nwKpi?.[0]?.value ?? '…'}
+          label={nwKpi?.[0]?.label ?? 'School-tagged'}
+        />
+        <AnalyticsStatCard
+          icon="🔧"
+          iconBg="#E8F0FA"
+          trend="Inferred"
+          value={nwKpi?.[2]?.value ?? '…'}
+          label={nwKpi?.[2]?.label ?? 'Technical / vocational'}
+        />
         <AnalyticsStatCard
           orangeTop
           icon="🛡"
           iconBg="#FEF3C7"
-          trend="+8%"
-          value="174"
-          label="YaR Centres"
+          trend="Inferred"
+          value={nwKpi?.[3]?.value ?? '…'}
+          label={nwKpi?.[3]?.label ?? 'Social / YaR–tagged'}
         />
-        <AnalyticsStatCard icon="✦" iconBg="#D1FAE5" trend="+41%" value="3,891" label="AI Queries/Mo" />
-        <AnalyticsStatCard icon="🌐" iconBg="#E8F0FA" trend="1.75M" value="28" label="States Reached" />
+        <AnalyticsStatCard
+          icon="✦"
+          iconBg="#D1FAE5"
+          trend={ontologyLoaded ? '+41%' : '…'}
+          value={ontologyLoaded ? '3,891' : '…'}
+          label="AI Queries/Mo"
+        />
+        <AnalyticsStatCard
+          icon="🌐"
+          iconBg="#E8F0FA"
+          trend={ontologyLoaded ? '1.75M' : '…'}
+          value={ontologyLoaded ? '28' : '…'}
+          label="States Reached"
+        />
       </div>
 
       <div className="mb-5 flex flex-col items-stretch gap-4 rounded-2xl border border-[rgba(0,74,153,0.32)] bg-gradient-to-br from-[#002240] to-[#003559] p-5 shadow-[0_4px_20px_rgba(0,74,153,0.12)] sm:flex-row sm:items-center">
@@ -1858,10 +2309,10 @@ export function AnalyticsView() {
             <div className="flex gap-2.5 py-2">
               <div className="mt-1.5 size-2 shrink-0 rounded-full bg-[#C07A00]" />
               <div className="min-w-0">
-                <div className="text-[13px] font-semibold text-ink">OWL version 90 days overdue</div>
+                <div className="text-[13px] font-semibold text-ink">Search index refresh overdue</div>
                 <div className="mt-1 text-xs leading-snug text-mid">
-                  Last ontology update: 2026-03-01. 3 new Salesian Family groups not yet mapped.{' '}
-                  <strong>Action:</strong> Schedule OWL update this week.
+                  Last full sync: 2026-03-01. Three new Salesian Family groups are not yet mapped.{' '}
+                  <strong>Action:</strong> Schedule a knowledge sync this week.
                 </div>
               </div>
             </div>
@@ -1987,7 +2438,21 @@ export function AnalyticsView() {
             </button>
           </div>
           <div className="p-4">
-            <AnalyticsBarChart rows={provinceBarRows} />
+            {!ontologyLoaded ? (
+              <div className="flex flex-col gap-2 py-1" aria-busy="true">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="h-3 w-[140px] shrink-0 animate-pulse rounded bg-slate-200" />
+                    <div className="h-[7px] min-w-0 flex-1 animate-pulse rounded-full bg-slate-100" />
+                    <div className="h-3 w-8 shrink-0 animate-pulse rounded bg-slate-100" />
+                  </div>
+                ))}
+              </div>
+            ) : provinceBarRows.length ? (
+              <AnalyticsBarChart rows={provinceBarRows} />
+            ) : (
+              <p className="py-6 text-center text-sm text-mid">No province buckets in this data slice.</p>
+            )}
           </div>
         </div>
         <div id="an-areas" className="rounded-xl border border-border-sdb bg-white shadow-sm">
@@ -2113,7 +2578,8 @@ export function AnalyticsView() {
         <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-border-sdb px-4 py-2.5">
             <span className="text-sm font-semibold text-sdb-blue-deep">
-              Province Strength — Members, Houses &amp; Resources
+              Province strength —{' '}
+              {colLabels.join(' · ')}
             </span>
             <Link
               to="/dashboard/persons"
@@ -2122,50 +2588,89 @@ export function AnalyticsView() {
               View all →
             </Link>
           </div>
-          <div className="overflow-x-auto p-4" id="an-province-table">
-            <table className="w-full min-w-[520px] border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b-2 border-sdb-blue-light text-[11px] text-sdb-blue-deep">
-                  <th className="px-2 py-1.5 text-left font-bold">Province</th>
-                  <th className="px-2 py-1.5 text-right font-bold">Members</th>
-                  <th className="px-2 py-1.5 text-right font-bold">Houses</th>
-                  <th className="px-2 py-1.5 text-right font-bold">Schools</th>
-                  <th className="px-2 py-1.5 text-right font-bold">Colleges</th>
-                </tr>
-              </thead>
-              <tbody className="text-mid">
-                {ANALYTICS_PROVINCE_DATA.map((p, i) => (
-                  <tr
-                    key={p.code}
-                    className="border-b border-border-sdb last:border-0"
-                    style={{ background: i % 2 === 0 ? 'var(--color-off-white, #f8fafc)' : undefined }}
-                  >
-                    <td className="px-2 py-1.5 font-semibold text-ink">
-                      {p.code} <span className="font-normal text-mid">{p.name}</span>
-                    </td>
-                    <td className="px-2 py-1.5 text-right">{p.members}</td>
-                    <td className="px-2 py-1.5 text-right">{p.houses}</td>
-                    <td className="px-2 py-1.5 text-right">{p.schools}</td>
-                    <td className="px-2 py-1.5 text-right">{p.colleges}</td>
-                  </tr>
+          <div className="overflow-x-auto p-4" id="an-province-table" aria-busy={!ontologyLoaded || undefined}>
+            {!ontologyLoaded ? (
+              <div className="space-y-2 py-2">
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="h-4 w-40 animate-pulse rounded bg-slate-200" />
+                    <div className="h-4 w-10 animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-10 animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-10 animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-10 animate-pulse rounded bg-slate-100" />
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            ) : (
+              <table className="w-full min-w-[520px] border-collapse text-left text-xs">
+                <thead>
+                  <tr className="border-b-2 border-sdb-blue-light text-[11px] text-sdb-blue-deep">
+                    <th className="px-2 py-1.5 text-left font-bold">Province</th>
+                    <th className="px-2 py-1.5 text-right font-bold">{colLabels[0]}</th>
+                    <th className="px-2 py-1.5 text-right font-bold">{colLabels[1]}</th>
+                    <th className="px-2 py-1.5 text-right font-bold">{colLabels[2]}</th>
+                    <th className="px-2 py-1.5 text-right font-bold">{colLabels[3]}</th>
+                  </tr>
+                </thead>
+                <tbody className="text-mid">
+                  {provinceFiltered.length ? (
+                    provinceFiltered.map((p, i) => (
+                      <tr
+                        key={p.code}
+                        className="border-b border-border-sdb last:border-0"
+                        style={{ background: i % 2 === 0 ? 'var(--color-off-white, #f8fafc)' : undefined }}
+                      >
+                        <td className="px-2 py-1.5 font-semibold text-ink">
+                          {p.code} <span className="font-normal text-mid">{p.name}</span>
+                        </td>
+                        <td className="px-2 py-1.5 text-right">{p.members}</td>
+                        <td className="px-2 py-1.5 text-right">{p.houses}</td>
+                        <td className="px-2 py-1.5 text-right">{p.schools}</td>
+                        <td className="px-2 py-1.5 text-right">{p.colleges}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-sm text-mid">
+                        {ontologyErr
+                          ? 'Library data unavailable — check the connection and refresh.'
+                          : 'No province-tagged rows in this sample.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
         <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
           <div className="border-b border-border-sdb px-4 py-2.5 text-sm font-semibold text-sdb-blue-deep">
-            Network Reach — Bosconet &amp; DB Tech
+            Network reach — top knowledge areas
           </div>
           <div className="p-4">
             <div id="an-network">
-              <AnalyticsBarChart rows={ANALYTICS_NETWORK_BAR_ROWS} />
+              {!ontologyLoaded ? (
+                <div className="flex flex-col gap-2 py-1" aria-busy="true">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="h-3 w-[150px] shrink-0 animate-pulse rounded bg-slate-200" />
+                      <div className="h-[7px] min-w-0 flex-1 animate-pulse rounded-full bg-slate-100" />
+                      <div className="h-3 w-8 shrink-0 animate-pulse rounded bg-slate-100" />
+                    </div>
+                  ))}
+                </div>
+              ) : networkBarRowsDynamic.length ? (
+                <AnalyticsBarChart rows={networkBarRowsDynamic} />
+              ) : (
+                <p className="py-4 text-center text-sm text-mid">No knowledge-area tags in this slice.</p>
+              )}
             </div>
             <div className="mt-3.5 rounded-lg border-l-[3px] border-sdb-blue bg-sdb-blue-pale/90 p-3">
-              <div className="text-[13px] font-bold text-sdb-blue-deep">Bosconet — 1.75 Million Lives / Year</div>
+              <div className="text-[13px] font-bold text-sdb-blue-deep">Sample scope</div>
               <div className="mt-1 text-xs text-mid">
-                350+ NGOs · 11 regional offices · 28 Indian states · Source: bosconet.in
+                {ontologyRows.length.toLocaleString()} rows loaded · {provinceRollup.length} province buckets · top
+                themes in chart. Bosconet headline figures are illustrative elsewhere on the site.
               </div>
             </div>
           </div>
@@ -2175,51 +2680,79 @@ export function AnalyticsView() {
       <div className="mt-1">
         <h4 className="mb-4 font-serif text-[17px] font-bold text-sdb-blue-deep">
           Province Deep Dive{' '}
-          <span className="text-sm font-normal text-mid">— sourced from official provincial websites</span>
+          <span className="text-sm font-normal text-mid">
+            — {ontologyLoaded ? 'metrics from the same sample as the table above' : 'loading…'}
+          </span>
         </h4>
         <div id="province-cards-grid" className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
-          {deepDiveProvinces.map((p) => (
-            <button
-              key={p.code}
-              type="button"
-              className="cursor-pointer rounded-xl border border-border-sdb bg-white text-left shadow-sm transition-shadow hover:shadow-md"
-              onClick={() => showToast(`Opening: ${p.fullName} — ${p.url}`)}
-            >
+          {!ontologyLoaded ? (
+            [0, 1, 2, 3, 4, 5].map((i) => (
               <div
-                className="flex flex-wrap items-start justify-between gap-2 border-b border-border-sdb px-4 py-2.5"
-                style={{ borderLeftWidth: 4, borderLeftColor: p.color, paddingLeft: 14 }}
+                key={i}
+                className="rounded-xl border border-dashed border-border-sdb bg-white p-4 shadow-sm"
+                aria-busy="true"
               >
-                <span className="text-sm font-semibold text-sdb-blue-deep">
-                  {p.code} · {p.fullName}
-                </span>
-                <a
-                  href={`https://${p.url}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[11px] font-semibold text-orange-text no-underline"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {p.url} ↗
-                </a>
-              </div>
-              <div className="px-4 py-3">
-                <div className="mb-2.5 text-xs text-mid">{p.state}</div>
-                <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                  {[
-                    ['Members', p.members],
-                    ['Houses', p.houses],
-                    ['Schools', p.schools],
-                    ['Colleges', p.colleges],
-                  ].map(([lab, val]) => (
-                    <div key={lab}>
-                      <div className="text-base font-bold text-sdb-blue-deep">{val}</div>
-                      <div className="text-[11px] text-mid">{lab}</div>
-                    </div>
+                <div className="mb-3 h-5 w-full max-w-[240px] animate-pulse rounded bg-slate-200" />
+                <div className="mb-4 h-3 w-full max-w-[140px] animate-pulse rounded bg-slate-100" />
+                <div className="grid grid-cols-4 gap-2">
+                  {[0, 1, 2, 3].map((j) => (
+                    <div key={j} className="h-10 animate-pulse rounded bg-slate-100" />
                   ))}
                 </div>
               </div>
-            </button>
-          ))}
+            ))
+          ) : deepDiveProvinces.length ? (
+            deepDiveProvinces.map((p, cardIdx) => (
+              <button
+                key={`${p.code}-${cardIdx}`}
+                type="button"
+                className="cursor-pointer rounded-xl border border-border-sdb bg-white text-left shadow-sm transition-shadow hover:shadow-md"
+                onClick={() => showToast(`Opening: ${p.fullName}${p.url ? ` — ${p.url}` : ''}`)}
+              >
+                <div
+                  className="flex flex-wrap items-start justify-between gap-2 border-b border-border-sdb px-4 py-2.5"
+                  style={{ borderLeftWidth: 4, borderLeftColor: p.color, paddingLeft: 14 }}
+                >
+                  <span className="text-sm font-semibold text-sdb-blue-deep">
+                    {p.code} · {p.fullName}
+                  </span>
+                  {p.url ? (
+                    <a
+                      href={`https://${p.url}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-semibold text-orange-text no-underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {p.url} ↗
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-mid">Index only</span>
+                  )}
+                </div>
+                <div className="px-4 py-3">
+                  <div className="mb-2.5 text-xs text-mid">{p.state}</div>
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    {[
+                      [colLabels[0], p.members],
+                      [colLabels[1], p.houses],
+                      [colLabels[2], p.schools],
+                      [colLabels[3], p.colleges],
+                    ].map(([lab, val]) => (
+                      <div key={String(lab)}>
+                        <div className="text-base font-bold text-sdb-blue-deep">{val}</div>
+                        <div className="text-[11px] text-mid">{lab}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </button>
+            ))
+          ) : (
+            <div className="col-span-full rounded-xl border border-dashed border-border-sdb bg-off-white py-12 text-center text-sm text-mid">
+              No provinces to show for deep dive.
+            </div>
+          )}
         </div>
       </div>
     </main>
@@ -2282,7 +2815,7 @@ const ACCESS_MATRIX_MODULES = [
   { id: 'events', label: 'Events' },
   { id: 'persons', label: 'Persons' },
   { id: 'ai', label: 'AI Assistant' },
-  { id: 'owl', label: 'OWL Update' },
+  { id: 'owl', label: 'Knowledge sync' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'governance', label: 'Governance' },
   { id: 'access', label: 'Access Control' },
@@ -2480,7 +3013,7 @@ export function AccessView() {
     <main id="page-access" className="relative min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Access Control"
-        subtitle="Changes are saved to Databricks and apply the next time users with that role sign in."
+        subtitle="Changes are saved on the server and apply the next time users with that role sign in."
       />
       <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-sdb px-4 py-2.5">

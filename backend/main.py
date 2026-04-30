@@ -17,7 +17,7 @@ app.add_middleware(
         "http://localhost:5000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://demo-global-galesian-digital-platform.imman.workers.dev",
+        "http://localhost:5050",
         "https://globalsalesiandigitalplatform.jamesrubert.workers.dev",
         "https://gsdp-7474649503171619.aws.databricksapps.com"
     ],

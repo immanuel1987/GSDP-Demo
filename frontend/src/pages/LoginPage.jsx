@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { buildSessionFromLoginResponse, postLoginPath } from '../auth/loginSession'
+import { buildSessionFromLoginResponse, getPostLoginTarget } from '../auth/loginSession'
 import { getSession, setSession } from '../auth/session'
 import { apiLogin } from '../lib/authApi'
 
@@ -17,14 +17,10 @@ export function LoginPage() {
   useEffect(() => {
     const existing = getSession()
     if (existing?.role) {
-      const p = typeof location.state?.prefilledPrompt === 'string' ? location.state.prefilledPrompt.trim() : ''
-      if (p) {
-        navigate('/dashboard/ai', { replace: true, state: { prefilledPrompt: p } })
-      } else {
-        navigate(postLoginPath(existing.role), { replace: true })
-      }
+      const target = getPostLoginTarget(location.state, existing.role)
+      navigate(target.path, { replace: true, ...(target.state ? { state: target.state } : {}) })
     }
-  }, [navigate, location.key])
+  }, [navigate, location.key, location.state])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -40,12 +36,8 @@ export function LoginPage() {
       const data = await apiLogin(id, password)
       const sessionPayload = buildSessionFromLoginResponse(data)
       setSession(sessionPayload)
-      const p = typeof location.state?.prefilledPrompt === 'string' ? location.state.prefilledPrompt.trim() : ''
-      if (p) {
-        navigate('/dashboard/ai', { replace: true, state: { prefilledPrompt: p } })
-      } else {
-        navigate(postLoginPath(sessionPayload.role), { replace: true })
-      }
+      const target = getPostLoginTarget(location.state, sessionPayload.role)
+      navigate(target.path, { replace: true, ...(target.state ? { state: target.state } : {}) })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.')
       setInfo('')

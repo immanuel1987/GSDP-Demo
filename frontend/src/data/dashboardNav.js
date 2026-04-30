@@ -8,7 +8,7 @@ export const DASHBOARD_PAGE_TITLES = {
   events: 'Events',
   persons: 'Persons Directory',
   ai: 'AI Assistant',
-  owl: 'OWL Ontology Update',
+  owl: 'Knowledge base sync',
   analytics: 'Analytics & Platform Insights',
   governance: 'Governance & Policy',
   access: 'Access Control',
@@ -160,9 +160,9 @@ export const PLATFORM_KPI_STRIP = [
     icon: '✦',
     bg: '#fef3c7',
     trend: '+41%',
-    val: '3,891',
+    val: '0',
     lbl: 'AI Queries/Mo',
-    orangeTop: true,
+    orangeTop: false,
   },
 ]
 
@@ -345,11 +345,11 @@ export const ROLE_QUICK_ACTIONS = {
   editor: [
     { icon: '✅', t: 'Review Submissions', s: 'Check recent content', page: 'resources' },
     { icon: '🗂', t: 'Edit Collections', s: 'Curated sets', page: 'collections' },
-    { icon: '🦉', t: 'OWL Update', s: 'Ontology pipeline', page: 'owl' },
+    { icon: '🦉', t: 'Knowledge sync', s: 'Refresh search index', page: 'owl' },
     { icon: '📈', t: 'Dept. Stats', s: 'Usage analytics', page: 'analytics' },
   ],
   liaison: [
-    { icon: '🦉', t: 'Trigger OWL Update', s: 'Update ontology', page: 'owl' },
+    { icon: '🦉', t: 'Run knowledge sync', s: 'Refresh search index', page: 'owl' },
     { icon: '📚', t: 'My Submissions', s: 'Track status', page: 'resources' },
     { icon: '📊', t: 'Province Report', s: 'Contribution stats', page: 'analytics' },
     { icon: '📅', t: 'Events', s: 'Upcoming', page: 'events' },

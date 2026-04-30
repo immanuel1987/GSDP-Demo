@@ -53,7 +53,7 @@ const OWL_NAV = {
   page: 'owl',
   to: '/dashboard/owl',
   icon: '🦉',
-  label: 'OWL Update',
+  label: 'Knowledge sync',
 }
 
 const ADMIN_NAV = [
@@ -209,7 +209,7 @@ export function DashboardLayout() {
               id="ontology-sec"
               className="px-5 pb-1.5 pt-3.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/[0.22] lg:text-[9px]"
             >
-              Ontology
+              Data pipeline
             </div>
             {allowedSet.has('owl') ? (
               <NavLink
