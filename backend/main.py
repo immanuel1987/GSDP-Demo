@@ -32,4 +32,4 @@ app.include_router(ontology.router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the Global Salesian Digital Platform API"}
+    return {"message": "Welcome to the Global Salesian Digital Platform API (v1.0.0)"}
