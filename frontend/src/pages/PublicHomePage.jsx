@@ -88,6 +88,7 @@ const FALLBACK_NEWS = [
   { key: 'n2', d: '15', m: 'Mar', loc: 'South Asia · Siliguri', head: 'LuvlyU launched to inspire mental wellness among peers', tag: 'Mental Health' },
   { key: 'n3', d: '14', m: 'Mar', loc: 'South Asia · Assam', head: 'Disaster preparedness boosted in Morigaon — SAFE Initiative', tag: 'Social Development' },
   { key: 'n4', d: '11', m: 'Mar', loc: 'Europe · Turin', head: '29th General Chapter publishes final guidelines on formation', tag: 'Formation' },
+  { key: 'n5', d: '08', m: 'Mar', loc: 'South Asia · Chennai', head: 'Don Bosco Theological Centre hosts provincial study week', tag: 'General Salesian Resource' },
 ]
 
 const FALLBACK_TRENDING = [
@@ -546,7 +547,7 @@ export function PublicHomePage() {
   const newsItems = useMemo(() => {
     if (!homeFetchDone) return []
     if (!Array.isArray(homeRows) || homeRows.length === 0) return FALLBACK_NEWS
-    const n = buildNewsItemsFromOntologyRows(homeRows, { skip: 8, limit: 6 })
+    const n = buildNewsItemsFromOntologyRows(homeRows, { skip: 8, limit: 5 })
     return n.length ? n : FALLBACK_NEWS
   }, [homeFetchDone, homeRows])
 
@@ -571,577 +572,485 @@ export function PublicHomePage() {
     <>
       <div className="hp-root">
 
-      {/* UTILITY BAR */}
-      <div className="hp-util">
-        <div className="hp-util-row">
-          <div className="hp-util-l">
-            <span><b>OPEN KNOWLEDGE</b></span>
-            <span>South Asia Pilot</span>
-            <span>Strenna 2026</span>
-            <span>136 nations · 1,703 houses</span>
-          </div>
-          <div className="hp-util-r">
-            <a className="on">EN</a><a>IT</a><a>ES</a><a>PT</a><a>FR</a>
+        {/* UTILITY BAR */}
+        <div className="hp-util">
+          <div className="hp-util-row">
+            <div className="hp-util-l">
+              <span><b>OPEN KNOWLEDGE</b></span>
+              <span>South Asia Pilot</span>
+              <span>Strenna 2026</span>
+              <span>136 nations · 1,703 houses</span>
+            </div>
+            <div className="hp-util-r">
+              <a className="on">EN</a><a>IT</a><a>ES</a><a>PT</a><a>FR</a>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* HEADER */}
-      <header className="hp-header">
-        <div className="hp-nav">
-          <div className="hp-brand" onClick={() => navigate('/')}>
-            <div className="hp-brand-tile">
-              <div className="hp-brand-tile-mark" aria-hidden>
-                G
+        {/* HEADER */}
+        <header className="hp-header">
+          <div className="hp-nav">
+            <div className="hp-brand" onClick={() => navigate('/')}>
+              <div className="hp-brand-tile">
+                <div className="hp-brand-tile-mark" aria-hidden>
+                  G
+                </div>
+                <div className="hp-brand-tile-body">
+                  <div className="hp-brand-tile-title">Global Salesian</div>
+                  <div className="hp-brand-tile-sub">Digital Platform</div>
+                </div>
               </div>
-              <div className="hp-brand-tile-body">
-                <div className="hp-brand-tile-title">Global Salesian</div>
-                <div className="hp-brand-tile-sub">Digital Platform</div>
+            </div>
+            <HpNavMenu />
+            <div className="hp-nav-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" />
+              </svg>
+              <input placeholder={`Search ${catalogTotalLabel} resources…`} />
+              <span className="hp-kbd">⌘K</span>
+            </div>
+            <div className="hp-nav-cta">
+              <button className="hp-btn" onClick={() => navigate('/login')}>Sign in</button>
+              <button className="hp-btn hp-btn-primary" onClick={() => navigate('/login')}>Enter Platform</button>
+            </div>
+          </div>
+        </header>
+
+        {/* HERO: full-width slider band, then sidebar row */}
+        <section className="hp-hero-section" id="hp-section-hero">
+          <div className="hp-hero-slider-bleed">
+            <HeroSlider
+              key={!homeFetchDone ? 'hero-loading' : heroSlides?.length ? 'hero-ontology' : 'hero-fallback'}
+              loading={!homeFetchDone}
+              slides={homeFetchDone ? (heroSlides ?? undefined) : undefined}
+            />
+          </div>
+
+          <div className="hp-hero-sub" id="hp-section-live">
+            <div className="hp-hero-r">
+              {/* Rector card */}
+              <div className="hp-rector">
+                {!homeFetchDone ? (
+                  <>
+                    <div className="hp-rector-av hp-rector-av--skeleton" aria-hidden />
+                    <div className="hp-rector-info hp-data-loading" aria-busy="true">
+                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--sm" />
+                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--title" />
+                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--xs" />
+                    </div>
+                    <div className="hp-rector-actions hp-data-loading" aria-hidden>
+                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--action" />
+                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--action hp-skel-line--action-narrow" />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="hp-rector-av">FA</div>
+                    <div className="hp-rector-info">
+                      <div className="role">Rector Major · 11th Successor</div>
+                      <h3>Fr. Fabio Attard</h3>
+                      <div className="since">Since 25 Mar 2025 · Term 2025–2031</div>
+                    </div>
+                    <div className="hp-rector-actions">
+                      <a>Biography ↗</a>
+                      <a>Chapter docs ↗</a>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Live stack */}
+              <div className="hp-live-stack">
+                <div className="hp-live">
+                  <div className="hp-live-h">
+                    <span className="hp-live-lbl">Live Knowledge Base</span>
+                    <span className="hp-live-upd">{liveUpdated ? `Index · ${liveUpdated}` : 'Updated today'}</span>
+                  </div>
+                  <div className="hp-live-grid">
+                    {!homeFetchDone ? (
+                      [0, 1, 2, 3].map((i) => (
+                        <div key={i} className="hp-live-cell hp-live-cell--skeleton" aria-busy="true">
+                          <div className="v hp-skel-line hp-skel-on-light hp-skel-line--stat" />
+                          <div className="k hp-skel-line hp-skel-on-light hp-skel-line--stat-sm" />
+                          <div className="delta hp-skel-line hp-skel-on-light hp-skel-line--stat-xs" />
+                        </div>
+                      ))
+                    ) : (
+                      [
+                        { v: catalogTotalLabel, k: 'Resources', d: 'Catalogued in ontology' },
+                        { v: '136', k: 'Nations', d: "+2 since '24", world: true },
+                        { v: '13,750', k: 'Salesians', d: 'GC29 census' },
+                        { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
+                      ].map((c, i) => (
+                        <div key={i} className={`hp-live-cell${c.world ? ' hp-live-cell--world' : ''}`}>
+                          <div className="v">{c.v}</div>
+                          <div className="k">{c.k}</div>
+                          <div className="delta">{c.d}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Trending */}
+                <div className="hp-trend">
+                  <div className="hp-trend-h">
+                    <span className="hp-trend-t">Trending searches</span>
+                    <span className="hp-trend-week">Past 7 days</span>
+                  </div>
+                  <div className="hp-trend-list">
+                    {!homeFetchDone ? (
+                      <div className="hp-data-loading" aria-busy="true">
+                        {[0, 1, 2, 3].map((i) => (
+                          <div key={i} className="hp-trend-row hp-skel-row">
+                            <span className="hp-trend-rk hp-skel-pill" />
+                            <span className="hp-skel-line" />
+                            <span className="hp-trend-ct hp-skel-pill hp-skel-pill--sm" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      trendingItems.map((t, i) => (
+                        <div
+                          key={t.key ?? i}
+                          className="hp-trend-row"
+                          role="button"
+                          tabIndex={0}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              navigateLoginNext(navigate, '/dashboard/resources')
+                            }
+                          }}
+                        >
+                          <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
+                          <span className="hp-trend-q">{t.q}</span>
+                          <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
+                            {t.up && (
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="m6 15 6-6 6 6" />
+                              </svg>
+                            )}
+                            {t.ct}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <HpNavMenu />
-          <div className="hp-nav-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" />
-            </svg>
-            <input placeholder={`Search ${catalogTotalLabel} resources…`} />
-            <span className="hp-kbd">⌘K</span>
-          </div>
-          <div className="hp-nav-cta">
-            <button className="hp-btn" onClick={() => navigate('/login')}>Sign in</button>
-            <button className="hp-btn hp-btn-primary" onClick={() => navigate('/login')}>Enter Platform</button>
-          </div>
-        </div>
-      </header>
+        </section>
 
-      {/* HERO: full-width slider band, then sidebar row */}
-      <section className="hp-hero-section" id="hp-section-hero">
-        <div className="hp-hero-slider-bleed">
-          <HeroSlider
-            key={!homeFetchDone ? 'hero-loading' : heroSlides?.length ? 'hero-ontology' : 'hero-fallback'}
-            loading={!homeFetchDone}
-            slides={homeFetchDone ? (heroSlides ?? undefined) : undefined}
-          />
-        </div>
+        {/* 3-COLUMN BAND */}
+        <section className="hp-band" id="hp-section-band">
+          {/* News */}
+          <div className="hp-panel" id="hp-news-panel">
+            <div className="hp-panel-h">
+              <div>
+                <div className="hp-panel-title">Latest from the field</div>
+                <div className="hp-panel-sub">News agency · 136 nations</div>
+              </div>
+              <a
+                className="hp-panel-all"
+                onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
+                style={{ cursor: 'pointer' }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigateLoginNext(navigate, '/dashboard/resources')
+                  }
+                }}
+              >
+                All news →
+              </a>
 
-        <div className="hp-hero-sub" id="hp-section-live">
-          <div className="hp-hero-r">
-            {/* Rector card */}
-            <div className="hp-rector">
+            </div>
+            <div className="hp-news-list">
               {!homeFetchDone ? (
-                <>
-                  <div className="hp-rector-av hp-rector-av--skeleton" aria-hidden />
-                  <div className="hp-rector-info hp-data-loading" aria-busy="true">
-                    <div className="hp-skel-line hp-skel-on-light hp-skel-line--sm" />
-                    <div className="hp-skel-line hp-skel-on-light hp-skel-line--title" />
-                    <div className="hp-skel-line hp-skel-on-light hp-skel-line--xs" />
-                  </div>
-                  <div className="hp-rector-actions hp-data-loading" aria-hidden>
-                    <div className="hp-skel-line hp-skel-on-light hp-skel-line--action" />
-                    <div className="hp-skel-line hp-skel-on-light hp-skel-line--action hp-skel-line--action-narrow" />
-                  </div>
-                </>
+                <div className="hp-data-loading" aria-busy="true">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div key={i} className="hp-news-item hp-skel-news">
+                      <div className="hp-news-date hp-skel-block" />
+                      <div className="hp-news-body">
+                        <div className="hp-skel-line hp-skel-line--sm" />
+                        <div className="hp-skel-line" />
+                        <span className="tag hp-skel-pill hp-skel-pill--tag" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <>
-                  <div className="hp-rector-av">FA</div>
-                  <div className="hp-rector-info">
-                    <div className="role">Rector Major · 11th Successor</div>
-                    <h3>Fr. Fabio Attard</h3>
-                    <div className="since">Since 25 Mar 2025 · Term 2025–2031</div>
+                newsItems.map((n, i) => (
+                  <div
+                    key={n.key ?? i}
+                    className="hp-news-item"
+                    role="button"
+                    tabIndex={0}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigateLoginNext(navigate, '/dashboard/resources')
+                      }
+                    }}
+                  >
+                    <div className="hp-news-date"><div className="d">{n.d}</div><div className="m">{n.m}</div></div>
+                    <div className="hp-news-body">
+                      <div className="loc">{n.loc}</div>
+                      <div className="head">{n.head}</div>
+                    </div>
                   </div>
-                  <div className="hp-rector-actions">
-                    <a>Biography ↗</a>
-                    <a>Chapter docs ↗</a>
-                  </div>
-                </>
+                ))
               )}
             </div>
+          </div>
 
-            {/* Live stack */}
-            <div className="hp-live-stack">
-              <div className="hp-live">
-                <div className="hp-live-h">
-                  <span className="hp-live-lbl">Live Knowledge Base</span>
-                  <span className="hp-live-upd">{liveUpdated ? `Index · ${liveUpdated}` : 'Updated today'}</span>
-                </div>
-                <div className="hp-live-grid">
-                  {!homeFetchDone ? (
-                    [0, 1, 2, 3].map((i) => (
-                      <div key={i} className="hp-live-cell hp-live-cell--skeleton" aria-busy="true">
-                        <div className="v hp-skel-line hp-skel-on-light hp-skel-line--stat" />
-                        <div className="k hp-skel-line hp-skel-on-light hp-skel-line--stat-sm" />
-                        <div className="delta hp-skel-line hp-skel-on-light hp-skel-line--stat-xs" />
-                      </div>
-                    ))
-                  ) : (
-                    [
-                      { v: catalogTotalLabel, k: 'Resources', d: 'Catalogued in ontology' },
-                      { v: '136', k: 'Nations', d: "+2 since '24", world: true },
-                      { v: '13,750', k: 'Salesians', d: 'GC29 census' },
-                      { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
-                    ].map((c, i) => (
-                      <div key={i} className={`hp-live-cell${c.world ? ' hp-live-cell--world' : ''}`}>
-                        <div className="v">{c.v}</div>
-                        <div className="k">{c.k}</div>
-                        <div className="delta">{c.d}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
+          {/* Distribution */}
+          <div className="hp-panel" id="hp-distribution">
+            <div className="hp-panel-h">
+              <div>
+                <div className="hp-panel-title">Where the work happens</div>
+                <div className="hp-panel-sub">7,240 institutions · by type</div>
               </div>
-
-              {/* Trending */}
-              <div className="hp-trend">
-                <div className="hp-trend-h">
-                  <span className="hp-trend-t">Trending searches</span>
-                  <span className="hp-trend-week">Past 7 days</span>
-                </div>
-                <div className="hp-trend-list">
-                  {!homeFetchDone ? (
-                    <div className="hp-data-loading" aria-busy="true">
-                      {[0, 1, 2, 3].map((i) => (
-                        <div key={i} className="hp-trend-row hp-skel-row">
-                          <span className="hp-trend-rk hp-skel-pill" />
-                          <span className="hp-skel-line" />
-                          <span className="hp-trend-ct hp-skel-pill hp-skel-pill--sm" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    trendingItems.map((t, i) => (
-                      <div
-                        key={t.key ?? i}
-                        className="hp-trend-row"
-                        role="button"
-                        tabIndex={0}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            navigateLoginNext(navigate, '/dashboard/resources')
-                          }
-                        }}
-                      >
-                        <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
-                        <span className="hp-trend-q">{t.q}</span>
-                        <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
-                          {t.up && (
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <path d="m6 15 6-6 6 6" />
-                            </svg>
-                          )}
-                          {t.ct}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3-COLUMN BAND */}
-      <section className="hp-band" id="hp-section-band">
-        {/* News */}
-        <div className="hp-panel" id="hp-news-panel">
-          <div className="hp-panel-h">
-            <div>
-              <div className="hp-panel-title">Latest from the field</div>
-              <div className="hp-panel-sub">News agency · 136 nations</div>
-            </div>
-            <a
-              className="hp-panel-all"
-              onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
-              style={{ cursor: 'pointer' }}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  navigateLoginNext(navigate, '/dashboard/resources')
-                }
-              }}
-            >
-              All news →
-            </a>
-
-          </div>
-          <div className="hp-news-list">
-            {!homeFetchDone ? (
-              <div className="hp-data-loading" aria-busy="true">
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="hp-news-item hp-skel-news">
-                    <div className="hp-news-date hp-skel-block" />
-                    <div className="hp-news-body">
-                      <div className="hp-skel-line hp-skel-line--sm" />
-                      <div className="hp-skel-line" />
-                      <span className="tag hp-skel-pill hp-skel-pill--tag" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              newsItems.map((n, i) => (
-                <div
-                  key={n.key ?? i}
-                  className="hp-news-item"
-                  role="button"
-                  tabIndex={0}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      navigateLoginNext(navigate, '/dashboard/resources')
-                    }
-                  }}
-                >
-                  <div className="hp-news-date"><div className="d">{n.d}</div><div className="m">{n.m}</div></div>
-                  <div className="hp-news-body">
-                    <div className="loc">{n.loc}</div>
-                    <div className="head">{n.head}</div>
-                    <span className="tag">{n.tag}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Distribution */}
-        <div className="hp-panel" id="hp-distribution">
-          <div className="hp-panel-h">
-            <div>
-              <div className="hp-panel-title">Where the work happens</div>
-              <div className="hp-panel-sub">7,240 institutions · by type</div>
-            </div>
-            <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
-              Map →
-            </button>
-          </div>
-          <div className="hp-dist">
-            {!homeFetchDone ? (
-              <div className="hp-data-loading hp-dist--skeleton" aria-busy="true">
-                {[0, 1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="hp-dist-row">
-                    <div className="hp-dist-lbl hp-skel-line hp-skel-on-light hp-skel-line--dist-lbl" />
-                    <div className="hp-dist-bar-skel" />
-                    <div className="hp-dist-num hp-skel-line hp-skel-on-light hp-skel-line--dist-num" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              [
-                { lbl: 'DB Schools', pct: '78%', cls: 'a', num: '261' },
-                { lbl: 'Parishes', pct: '52%', cls: 'b', num: '174' },
-                { lbl: 'Youth-at-Risk', pct: '52%', cls: 'c', num: '174' },
-                { lbl: 'Technical Inst.', pct: '41%', cls: 'd', num: '138' },
-                { lbl: 'Formation', pct: '17%', cls: 'e', num: '57' },
-                { lbl: 'Colleges', pct: '15%', cls: 'a', num: '51' },
-              ].map((r, i) => (
-                <div key={i} className="hp-dist-row">
-                  <div className="hp-dist-lbl">{r.lbl}</div>
-                  <DistBar pct={r.pct} cls={r.cls} />
-                  <div className="hp-dist-num">{r.num}</div>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="hp-dist-foot">
-            <span><strong>South Asia pilot</strong> · 12 provinces</span>
-            <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
-              Full directory →
-            </button>
-          </div>
-        </div>
-
-        {/* Map */}
-        <div className="hp-panel" id="hp-map-panel">
-          <div className="hp-panel-h">
-            <div>
-              <div className="hp-panel-title">Global presence</div>
-              <div className="hp-panel-sub">1,703 communities active</div>
-            </div>
-            <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
-              Explore map →
-            </button>
-          </div>
-          <button type="button" className="hp-map-mini hp-map-mini--clickable" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')} aria-label="Explore map — sign in to open the full map">
-            <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet" className="hp-map-svg" aria-hidden>
-              <defs>
-                <linearGradient id="hp-map-ocean" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#d8ecfc" />
-                  <stop offset="100%" stopColor="#b8daf4" />
-                </linearGradient>
-                <filter id="hp-map-glow" x="-40%" y="-40%" width="180%" height="180%">
-                  <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodOpacity="0.35" />
-                </filter>
-              </defs>
-              <rect width="400" height="220" fill="url(#hp-map-ocean)" rx="4" />
-              <g stroke="#8aa4bd" strokeWidth="0.35" opacity="0.45">
-                <line x1="0" y1="55" x2="400" y2="55" strokeDasharray="3 5" />
-                <line x1="0" y1="110" x2="400" y2="110" strokeDasharray="3 5" />
-                <line x1="0" y1="165" x2="400" y2="165" strokeDasharray="3 5" />
-                <line x1="100" y1="0" x2="100" y2="220" strokeDasharray="3 5" />
-                <line x1="200" y1="0" x2="200" y2="220" strokeDasharray="3 5" />
-                <line x1="300" y1="0" x2="300" y2="220" strokeDasharray="3 5" />
-              </g>
-              <g fill="#e8efe6" stroke="#6b8cae" strokeWidth="1.1" strokeLinejoin="round">
-                <path d="M30,40 Q40,30 70,35 L95,55 L100,80 Q90,95 70,95 L50,90 L35,75 Q25,60 30,40 Z" />
-                <path d="M85,105 L100,105 L105,140 L95,170 L80,165 L78,135 Z" />
-                <path d="M180,40 Q195,32 215,38 L225,55 L215,68 L195,70 L180,60 Z" />
-                <path d="M195,75 L225,80 L230,115 L220,150 L205,160 L185,140 L185,105 Z" />
-                <path d="M230,35 Q260,28 310,38 L340,55 L335,90 L310,100 L275,95 L240,80 L228,55 Z" />
-                <path d="M275,95 L290,95 L292,120 L283,128 L275,115 Z" />
-                <path d="M310,140 L350,138 L355,158 L325,165 L308,155 Z" />
-              </g>
-              <g fontFamily="'JetBrains Mono', ui-monospace, monospace" fontWeight="600">
-                <g filter="url(#hp-map-glow)">
-                  <circle cx="200" cy="58" r="10" fill="#e67e22" opacity="0.22" />
-                  <circle cx="200" cy="58" r="5" fill="#e67e22" stroke="#fff" strokeWidth="1.5" />
-                  <text x="200" y="42" textAnchor="middle" fontSize="10" fill="#0a2540">Valdocco · HQ</text>
-                </g>
-                <g filter="url(#hp-map-glow)">
-                  <circle cx="283" cy="112" r="11" fill="#1f6eb8" opacity="0.22" />
-                  <circle cx="283" cy="112" r="5.5" fill="#1f6eb8" stroke="#fff" strokeWidth="1.5" />
-                  <text x="283" y="132" textAnchor="middle" fontSize="10" fill="#0a2540">South Asia pilot</text>
-                </g>
-                <circle cx="65" cy="72" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                <circle cx="92" cy="138" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                <circle cx="212" cy="122" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                <circle cx="322" cy="82" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                <circle cx="337" cy="158" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                <circle cx="55" cy="56" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-                <circle cx="182" cy="52" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-                <circle cx="242" cy="72" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-                <circle cx="202" cy="138" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-              </g>
-              <text x="200" y="208" textAnchor="middle" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="9" fill="#3d5a78" opacity="0.85">
-                Stylised overview · sign in for interactive map
-              </text>
-            </svg>
-          </button>
-          <div className="hp-map-foot">
-            <div className="hp-map-legend">
-              <span><span className="hp-map-dot" style={{ background: '#e67e22' }} />HQ</span>
-              <span><span className="hp-map-dot" style={{ background: '#1f6eb8' }} />Pilot</span>
-              <span><span className="hp-map-dot" style={{ background: '#1a8a6e' }} />Active</span>
-              <span><span className="hp-map-dot" style={{ background: '#c9a227' }} />Mission</span>
-            </div>
-            <span><strong style={{ color: '#0b1733' }}>92</strong> provinces</span>
-          </div>
-        </div>
-      </section>
-
-      {/* KNOWLEDGE GROWTH STRIP */}
-      <section className="hp-growth" id="hp-section-growth">
-        <div className="hp-growth-card">
-          <div className="hp-growth-l">
-            <h3>Corpus growing every week</h3>
-            <p className="desc">Resources catalogued under MARC21 with semantic enrichment. Every addition is OWL-validated and searchable across 5 languages within 24h.</p>
-          </div>
-          <div className="hp-growth-chart">
-            <svg viewBox="0 0 600 90" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="hp-grow" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="#d97228" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#d97228" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <line x1="0" y1="20" x2="600" y2="20" stroke="#e8e0c8" strokeDasharray="2 4" />
-              <line x1="0" y1="55" x2="600" y2="55" stroke="#e8e0c8" strokeDasharray="2 4" />
-              <path d="M0,80 L40,75 L80,72 L120,68 L160,60 L200,58 L240,52 L280,48 L320,42 L360,36 L400,30 L440,26 L480,20 L520,15 L560,12 L600,8 L600,90 L0,90 Z" fill="url(#hp-grow)" />
-              <path d="M0,80 L40,75 L80,72 L120,68 L160,60 L200,58 L240,52 L280,48 L320,42 L360,36 L400,30 L440,26 L480,20 L520,15 L560,12 L600,8" fill="none" stroke="#d97228" strokeWidth="2" />
-              <circle cx="0" cy="80" r="3" fill="#d97228" />
-              <circle cx="200" cy="58" r="3" fill="#d97228" />
-              <circle cx="400" cy="30" r="3" fill="#d97228" />
-              <circle cx="600" cy="8" r="4" fill="#d97228" stroke="#fff" strokeWidth="2" />
-              <text x="0" y="89" fontFamily="JetBrains Mono" fontSize="8" fill="#6b6452">Q1 '24</text>
-              <text x="200" y="89" fontFamily="JetBrains Mono" fontSize="8" fill="#6b6452">Q3 '24</text>
-              <text x="400" y="89" fontFamily="JetBrains Mono" fontSize="8" fill="#6b6452">Q1 '25</text>
-              <text x="565" y="89" fontFamily="JetBrains Mono" fontSize="8" fill="#0b1733" fontWeight="600">Q1 '26</text>
-            </svg>
-          </div>
-          <div className="hp-growth-r">
-            {!homeFetchDone ? (
-              <div className="hp-data-loading hp-growth-r--skeleton" aria-busy="true">
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="hp-growth-stat">
-                    <span className="k hp-skel-line hp-skel-on-light hp-skel-line--growth-k" />
-                    <span className="v hp-skel-line hp-skel-on-light hp-skel-line--growth-v" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                <div className="hp-growth-stat">
-                  <span className="k">Total resources</span>
-                  <span className="v">
-                    {catalogTotalLabel} <small>in catalog</small>
-                  </span>
-                </div>
-                <div className="hp-growth-stat">
-                  <span className="k">Avg time-to-index</span>
-                  <span className="v">
-                    18 hrs <small>−4h</small>
-                  </span>
-                </div>
-                <div className="hp-growth-stat">
-                  <span className="k">Open access ratio</span>
-                  <span className="v">
-                    100% <small>full corpus</small>
-                  </span>
-                </div>
-                <div className="hp-growth-stat">
-                  <span className="k">Active phase</span>
-                  <span className="v" style={{ color: '#d97228' }}>
-                    Phase 2 · AI
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* RECENT RESOURCES */}
-      <section className="hp-resources" id="hp-section-resources">
-        <div className="hp-res-h">
-          <div>
-            <h2>Recent resources</h2>
-            <div className="sub">Latest documents catalogued in the ontology</div>
-          </div>
-          <button type="button" className="hp-col-all" onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}>
-            See more →
-          </button>
-        </div>
-        <div className={`hp-res-grid${!homeFetchDone ? ' hp-data-loading' : ''}`} aria-busy={!homeFetchDone || undefined}>
-          {!homeFetchDone ? (
-            [0, 1, 2, 3].map((i) => (
-              <div key={i} className="hp-res-card hp-col-card--skeleton">
-                <div className="hp-skel-line hp-skel-line--sm" />
-                <div className="hp-skel-line" />
-                <div className="hp-skel-line hp-skel-line--xs" />
-              </div>
-            ))
-          ) : ontologyBlock?.data?.length > 0 ? (
-            ontologyBlock.data.slice(0, 4).map((raw, i) => {
-              const r = mapOntologyRowToResource(raw, i)
-              return (
-                <div key={r.document_id || i} className="hp-res-card" onClick={() => setSelectedResource(r)}>
-                  <div className="tag">{r.type || 'Document'}</div>
-                  <div className="ti">{r.title}</div>
-                  <div className="ct">{r.author || r.publisher || 'Unknown'}</div>
-                </div>
-              )
-            })
-          ) : (
-            <div className="hp-res-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#5a7aa0' }}>
-              No resources available at the moment.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* CURATED COLLECTIONS */}
-      <section className="hp-collections" id="hp-section-collections">
-        <div className="hp-col-h">
-          <div>
-            <h2>Curated collections</h2>
-            <div className="sub">Thematic knowledge paths — discover without needing an exact query</div>
-          </div>
-          <button type="button" className="hp-col-all" onClick={() => navigateLoginNext(navigate, '/dashboard/collections')}>
-            All collections →
-          </button>
-        </div>
-        <div className={`hp-col-grid${!homeFetchDone ? ' hp-data-loading' : ''}`} aria-busy={!homeFetchDone || undefined}>
-          {!homeFetchDone
-            ? [0, 1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="hp-col-card hp-col-card--skeleton">
-                <div className="hp-skel-line hp-skel-line--sm" />
-                <div className="hp-skel-line" />
-                <div className="hp-skel-line hp-skel-line--xs" />
-              </div>
-            ))
-            : collectionCards.map((c, i) => (
-              <button key={c.key ?? i} type="button" className={`hp-col-card ${c.cls}`} onClick={() => navigateLoginNext(navigate, '/dashboard/collections')}>
-                <div>
-                  <div className="tag">{c.tag}</div>
-                  <div className="ti">{c.ti}</div>
-                </div>
-                <div className="ct">{c.ct}</div>
+              <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
+                Map →
               </button>
-            ))}
-        </div>
-      </section>
-
-      {/* FOOTER */}
-      <section className="hp-foot" id="hp-section-foot">
-        <div className="hp-foot-card">
-          <div className="hp-foot-about" id="hp-foot-about">
-            <h4>About the Platform</h4>
-            <p>Open-access knowledge platform of the Salesians of Don Bosco. Built for scholars, educators, ministers, and the curious — semantic AI search across 5 languages.</p>
-            <div className="hp-foot-stay">
-              <input placeholder="Your email — get monthly updates" />
-              <button>Subscribe</button>
+            </div>
+            <div className="hp-dist">
+              {!homeFetchDone ? (
+                <div className="hp-data-loading hp-dist--skeleton" aria-busy="true">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="hp-dist-row">
+                      <div className="hp-dist-lbl hp-skel-line hp-skel-on-light hp-skel-line--dist-lbl" />
+                      <div className="hp-dist-bar-skel" />
+                      <div className="hp-dist-num hp-skel-line hp-skel-on-light hp-skel-line--dist-num" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                [
+                  { lbl: 'DB Schools', pct: '78%', cls: 'a', num: '261' },
+                  { lbl: 'Parishes', pct: '52%', cls: 'b', num: '174' },
+                  { lbl: 'Youth-at-Risk', pct: '52%', cls: 'c', num: '174' },
+                  { lbl: 'Technical Inst.', pct: '41%', cls: 'd', num: '138' },
+                  { lbl: 'Formation', pct: '17%', cls: 'e', num: '57' },
+                  { lbl: 'Colleges', pct: '15%', cls: 'a', num: '51' },
+                ].map((r, i) => (
+                  <div key={i} className="hp-dist-row">
+                    <div className="hp-dist-lbl">{r.lbl}</div>
+                    <DistBar pct={r.pct} cls={r.cls} />
+                    <div className="hp-dist-num">{r.num}</div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="hp-dist-foot">
+              <div className="hp-dist-foot-l">
+                <strong>SOUTH ASIA PILOT</strong>
+                <span className="hp-dist-sep">/</span>
+                <span>12 PROVINCES</span>
+              </div>
+              <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
+                Full directory →
+              </button>
             </div>
           </div>
-          <div className="hp-foot-col">
-            <h4>Discover</h4>
-            <ul>
-              {publicDiscoverLinks.map((l) => (
-                <li key={l.href}>
-                  <a href={l.href} target="_blank" rel="noopener noreferrer">
-                    {l.label}
-                    {l.badge ? <span className="badge">{l.badge}</span> : null}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="hp-foot-col" id="hp-foot-southasia">
-            <h4>South Asia · 12 Provinces</h4>
-            <ul>
-              {footerProvinces.map((p) => (
-                <li key={p.href}>
-                  <a href={p.href} target="_blank" rel="noopener noreferrer">
-                    {p.title}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="hp-foot-col" id="hp-foot-network">
-            <h4>Network</h4>
-            <ul>
-              {publicNetworkFooterLinks.map((l) => (
-                <li key={l.href}>
-                  <a href={l.href} target="_blank" rel="noopener noreferrer">
-                    {l.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
 
-      {/* COPYRIGHT */}
-      <div className="hp-copy">
-        <div className="l">
-          <span>© 2026 Salesians of Don Bosco · All public resources are open access</span>
-        </div>
-        <div className="l">
-          <a>Privacy</a><a>Terms</a><a>Accessibility</a>
-          <a onClick={() => navigate('/login')}>Sign in</a>
-        </div>
-      </div>
+          {/* Map */}
+          <div className="hp-panel" id="hp-map-panel">
+            <div className="hp-panel-h">
+              <div>
+                <div className="hp-panel-title">Global presence</div>
+                <div className="hp-panel-sub">1,703 communities active</div>
+              </div>
+              <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
+                Explore map →
+              </button>
+            </div>
+            <button type="button" className="hp-map-mini hp-map-mini--clickable" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')} aria-label="Explore map — sign in to open the full map">
+              <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet" className="hp-map-svg" aria-hidden>
+                <defs>
+                  <linearGradient id="hp-map-ocean" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#d8ecfc" />
+                    <stop offset="100%" stopColor="#b8daf4" />
+                  </linearGradient>
+                  <filter id="hp-map-glow" x="-40%" y="-40%" width="180%" height="180%">
+                    <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodOpacity="0.35" />
+                  </filter>
+                </defs>
+                <rect width="400" height="220" fill="url(#hp-map-ocean)" rx="4" />
+                <g stroke="#8aa4bd" strokeWidth="0.35" opacity="0.45">
+                  <line x1="0" y1="55" x2="400" y2="55" strokeDasharray="3 5" />
+                  <line x1="0" y1="110" x2="400" y2="110" strokeDasharray="3 5" />
+                  <line x1="0" y1="165" x2="400" y2="165" strokeDasharray="3 5" />
+                  <line x1="100" y1="0" x2="100" y2="220" strokeDasharray="3 5" />
+                  <line x1="200" y1="0" x2="200" y2="220" strokeDasharray="3 5" />
+                  <line x1="300" y1="0" x2="300" y2="220" strokeDasharray="3 5" />
+                </g>
+                <g fill="#e8efe6" stroke="#6b8cae" strokeWidth="1.1" strokeLinejoin="round">
+                  <path d="M30,40 Q40,30 70,35 L95,55 L100,80 Q90,95 70,95 L50,90 L35,75 Q25,60 30,40 Z" />
+                  <path d="M85,105 L100,105 L105,140 L95,170 L80,165 L78,135 Z" />
+                  <path d="M180,40 Q195,32 215,38 L225,55 L215,68 L195,70 L180,60 Z" />
+                  <path d="M195,75 L225,80 L230,115 L220,150 L205,160 L185,140 L185,105 Z" />
+                  <path d="M230,35 Q260,28 310,38 L340,55 L335,90 L310,100 L275,95 L240,80 L228,55 Z" />
+                  <path d="M275,95 L290,95 L292,120 L283,128 L275,115 Z" />
+                  <path d="M310,140 L350,138 L355,158 L325,165 L308,155 Z" />
+                </g>
+                <g fontFamily="'JetBrains Mono', ui-monospace, monospace" fontWeight="600">
+                  <g filter="url(#hp-map-glow)">
+                    <circle cx="200" cy="58" r="10" fill="#e67e22" opacity="0.22" />
+                    <circle cx="200" cy="58" r="5" fill="#e67e22" stroke="#fff" strokeWidth="1.5" />
+                    <text x="200" y="42" textAnchor="middle" fontSize="10" fill="#0a2540">Valdocco · HQ</text>
+                  </g>
+                  <g filter="url(#hp-map-glow)">
+                    <circle cx="283" cy="112" r="11" fill="#1f6eb8" opacity="0.22" />
+                    <circle cx="283" cy="112" r="5.5" fill="#1f6eb8" stroke="#fff" strokeWidth="1.5" />
+                    <text x="283" y="132" textAnchor="middle" fontSize="10" fill="#0a2540">South Asia pilot</text>
+                  </g>
+                  <circle cx="65" cy="72" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
+                  <circle cx="92" cy="138" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
+                  <circle cx="212" cy="122" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
+                  <circle cx="322" cy="82" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
+                  <circle cx="337" cy="158" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
+                  <circle cx="55" cy="56" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
+                  <circle cx="182" cy="52" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
+                  <circle cx="242" cy="72" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
+                  <circle cx="202" cy="138" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
+                </g>
+                <text x="200" y="208" textAnchor="middle" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="9" fill="#3d5a78" opacity="0.85">
+                  Stylised overview · sign in for interactive map
+                </text>
+              </svg>
+            </button>
+            <div className="hp-map-foot">
+              <div className="hp-map-legend">
+                <span><span className="hp-map-dot" style={{ background: '#e67e22' }} />HQ</span>
+                <span><span className="hp-map-dot" style={{ background: '#1f6eb8' }} />Pilot</span>
+                <span><span className="hp-map-dot" style={{ background: '#1a8a6e' }} />Active</span>
+                <span><span className="hp-map-dot" style={{ background: '#c9a227' }} />Mission</span>
+              </div>
+              <span><strong style={{ color: '#0b1733' }}>92</strong> provinces</span>
+            </div>
+          </div>
+        </section>
 
-      <AiAssistantDock variant="public" />
+
+
+        {/* RECENT RESOURCES */}
+        <section className="hp-resources" id="hp-section-resources">
+          <div className="hp-res-h">
+            <div>
+              <h2>Recent resources</h2>
+              <div className="sub">Latest documents catalogued on the platform</div>
+            </div>
+            <button type="button" className="hp-col-all" onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}>
+              See more →
+            </button>
+          </div>
+          <div className={`hp-res-grid${!homeFetchDone ? ' hp-data-loading' : ''}`} aria-busy={!homeFetchDone || undefined}>
+            {!homeFetchDone ? (
+              [0, 1, 2, 3].map((i) => (
+                <div key={i} className="hp-res-card hp-col-card--skeleton">
+                  <div className="hp-skel-line hp-skel-line--sm" />
+                  <div className="hp-skel-line" />
+                  <div className="hp-skel-line hp-skel-line--xs" />
+                </div>
+              ))
+            ) : ontologyBlock?.data?.length > 0 ? (
+              ontologyBlock.data.slice(0, 4).map((raw, i) => {
+                const r = mapOntologyRowToResource(raw, i)
+                return (
+                  <div key={r.document_id || i} className="hp-res-card" onClick={() => setSelectedResource(r)}>
+
+                    <div className="ti">{r.title}</div>
+                    <div className="ct">
+                      {r.author && r.author !== '—' ? r.author :
+                        r.publisher ? r.publisher :
+                          'Don Bosco South Asia'}
+                    </div>
+                  </div>
+                )
+              })
+            ) : (
+              <div className="hp-res-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#5a7aa0' }}>
+                No resources available at the moment.
+              </div>
+            )}
+          </div>
+        </section>
+
+
+
+        {/* FOOTER */}
+        <section className="hp-foot" id="hp-section-foot">
+          <div className="hp-foot-card">
+            <div className="hp-foot-about" id="hp-foot-about">
+              <h4>About the Platform</h4>
+              <p>Open-access knowledge platform of the Salesians of Don Bosco. Built for scholars, educators, ministers, and the curious — semantic AI search across 5 languages.</p>
+              <div className="hp-foot-stay">
+                <input placeholder="Your email — get monthly updates" />
+                <button>Subscribe</button>
+              </div>
+            </div>
+            <div className="hp-foot-col">
+              <h4>Discover</h4>
+              <ul>
+                {publicDiscoverLinks.map((l) => (
+                  <li key={l.href}>
+                    <a href={l.href} target="_blank" rel="noopener noreferrer">
+                      {l.label}
+                      {l.badge ? <span className="badge">{l.badge}</span> : null}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="hp-foot-col" id="hp-foot-southasia">
+              <h4>South Asia · 12 Provinces</h4>
+              <ul>
+                {footerProvinces.map((p) => (
+                  <li key={p.href}>
+                    <a href={p.href} target="_blank" rel="noopener noreferrer">
+                      {p.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="hp-foot-col" id="hp-foot-network">
+              <h4>Network</h4>
+              <ul>
+                {publicNetworkFooterLinks.map((l) => (
+                  <li key={l.href}>
+                    <a href={l.href} target="_blank" rel="noopener noreferrer">
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* COPYRIGHT */}
+        <div className="hp-copy">
+          <div className="l">
+            <span>© 2026 Salesians of Don Bosco · All public resources are open access</span>
+          </div>
+          <div className="l">
+            <a>Privacy</a><a>Terms</a><a>Accessibility</a>
+            <a onClick={() => navigate('/login')}>Sign in</a>
+          </div>
+        </div>
+
+        <AiAssistantDock variant="public" />
       </div>
       <ResourceDetailModal resource={selectedResource} onClose={() => setSelectedResource(null)} />
     </>

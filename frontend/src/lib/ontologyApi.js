@@ -56,8 +56,8 @@ export function apiFetch(input, init) {
 
 export async function fetchOntologyRows({ limit = 80, offset = 0, q = '' } = {}) {
   const params = new URLSearchParams()
-  params.set('limit', String(500))
-  params.set('offset', String(offset))
+  params.set('limit', String(400))
+  params.set('offset', String(5))
   if (q.trim()) params.set('q', q.trim())
   const url = `${apiBase()}/data/ontology?${params.toString()}`
   const res = await apiFetch(url)
@@ -199,16 +199,23 @@ export function resourceDocumentKind(resource) {
 /** Bronze often stores JSON arrays or placeholder enums — normalize for card text. */
 export function coerceOntologyString(val) {
   if (val == null) return ''
+  function deep(x) {
+    if (x == null) return ''
+    if (typeof x === 'string') return x.trim()
+    if (typeof x !== 'object') return String(x).trim()
+    if (Array.isArray(x)) return x.map(deep).filter(Boolean).join(', ')
+    const keys = ['name', 'title', 'label', 'value', 'text', 'display_name']
+    for (const k of keys) { if (x[k] && typeof x[k] === 'string') return x[k].trim(); }
+    const fs = Object.values(x).find(v => typeof v === 'string')
+    return fs ? fs.trim() : ''
+  }
   const s = String(val).trim()
   if (!s || s === '[]' || s === '{}' || s.toLowerCase() === 'null') return ''
-  if ((s.startsWith('[') || s.startsWith('{')) && s.length < 500000) {
+  if ((s.startsWith('[') || s.startsWith('{')) && s.length < 100000) {
     try {
       const j = JSON.parse(s)
-      if (Array.isArray(j)) return j.map((x) => String(x).trim()).filter(Boolean).join(', ')
-      if (j && typeof j === 'object') return Object.values(j).map((x) => String(x).trim()).filter(Boolean).join(', ')
-    } catch {
-      /* leave as raw string */
-    }
+      return deep(j)
+    } catch { }
   }
   return s
 }
@@ -311,8 +318,8 @@ export function mapOntologyRowToResource(row, index) {
     coerceOntologyString(row.contributors) ||
     (row.contacts ? coerceOntologyString(row.contacts).slice(0, 120) : '') ||
     '—'
-  const publisher = row.publisher || ''
-  const area = row.knowledge_area || row.ministry || row.charism_dimension || row.source_category || ''
+  const publisher = coerceOntologyString(row.publisher)
+  const area = coerceOntologyString(row.knowledge_area || row.ministry || row.charism_dimension || row.source_category) || ''
   const docUrl = pickDocumentUrlFromOntologyRow(row)
   const docKind = inferDocumentKindFromOntology(docUrl, row)
   const type = resolveResourceCardType(row, docKind)
