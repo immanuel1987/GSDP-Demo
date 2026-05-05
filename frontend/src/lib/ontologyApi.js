@@ -334,10 +334,23 @@ export async function fetchOntologySummary() {
 }
 
 /**
+ * Fix known display-title glitches from source data (e.g. leading "Sacred" truncated to "ed").
+ */
+export function normalizeOntologyDisplayTitle(raw) {
+  const t = String(raw ?? '').trim()
+  if (!t) return t
+  if (/^ed Heart College\b/i.test(t)) return t.replace(/^ed Heart College/i, 'Sacred Heart College')
+  if (/^ed Heart\b/i.test(t)) return t.replace(/^ed Heart/i, 'Sacred Heart')
+  return t
+}
+
+/**
  * Map a row from ontology.bronze.final_table_ontology to Resource Library card shape.
  */
 export function mapOntologyRowToResource(row, index) {
-  const title = row.title || row.hasTitle || row.name || row.subject || row.slug || 'Untitled'
+  const title = normalizeOntologyDisplayTitle(
+    row.title || row.hasTitle || row.name || row.subject || row.slug || 'Untitled',
+  )
   const author =
     coerceOntologyString(row.author) ||
     coerceOntologyString(row.authors) ||

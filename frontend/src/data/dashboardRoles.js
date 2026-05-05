@@ -47,8 +47,8 @@ export const ROLE_STATS = {
   rector_major: [
     { icon: '🌍', bg: '#fef3c7', val: '92', lbl: 'Salesian provinces', tr: 'Congregation scope' },
     { icon: '📚', bg: '#d1fae5', val: '12,847', lbl: 'Total resources', tr: '+12% this month' },
-    { icon: '📅', bg: '#eef5fc', val: '10,523', lbl: 'Events listed', tr: 'News & calendar' },
-    { icon: '🏛', bg: '#ede9fe', val: '7,240', lbl: 'Mission locations', tr: 'Institutions' },
+    { icon: '📅', bg: '#eef5fc', val: '12', lbl: 'Events listed', tr: 'News & calendar' },
+    { icon: '🏛', bg: '#ede9fe', val: '10', lbl: 'Mission locations', tr: 'Institutions' },
   ],
   provincial: [
     { icon: '📚', bg: '#fef3c7', val: '—', lbl: 'Resources in scope', tr: 'Region-scoped' },
@@ -65,8 +65,8 @@ export const ROLE_STATS = {
   admin: [
     { icon: '🌍', bg: '#fef3c7', val: '92', lbl: 'Salesian provinces', tr: 'Congregation scope' },
     { icon: '📚', bg: '#d1fae5', val: '12,847', lbl: 'Total resources', tr: '+12% this month' },
-    { icon: '📅', bg: '#eef5fc', val: '10,523', lbl: 'Events listed', tr: 'News & calendar' },
-    { icon: '🏛', bg: '#ede9fe', val: '7,240', lbl: 'Mission locations', tr: 'Institutions' },
+    { icon: '📅', bg: '#eef5fc', val: '12', lbl: 'Events listed', tr: 'News & calendar' },
+    { icon: '🏛', bg: '#ede9fe', val: '10', lbl: 'Mission locations', tr: 'Institutions' },
   ],
   editor: [
     { icon: '📝', bg: '#fef3c7', val: '234', lbl: 'Resources curated', tr: '+28 this month' },
@@ -88,7 +88,7 @@ export const ROLE_STATS = {
   ],
   public: [
     { icon: '📚', bg: '#fef3c7', val: '10,000+', lbl: 'Open resources', tr: '+5%' },
-    { icon: '🏛', bg: '#d1fae5', val: '7,240', lbl: 'Institutions', tr: 'Global' },
+    { icon: '🏛', bg: '#d1fae5', val: '10', lbl: 'Institutions', tr: 'Global' },
     { icon: '📅', bg: '#eef5fc', val: '10,523', lbl: 'Events', tr: 'Live' },
     { icon: '🌐', bg: '#ede9fe', val: '5', lbl: 'Languages', tr: 'EN+' },
   ],

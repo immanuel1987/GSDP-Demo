@@ -67,9 +67,8 @@ function DashboardKpiCardSkeleton({ orangeTop }) {
         }`}
       aria-busy="true"
     >
-      <div className="mb-2 flex items-start justify-between">
+      <div className="mb-2">
         <div className="size-10 shrink-0 animate-pulse rounded-lg bg-slate-200" aria-hidden />
-        <div className="h-4 w-16 shrink-0 animate-pulse rounded bg-slate-100" aria-hidden />
       </div>
       <div className="h-[30px] max-w-[7.5rem] animate-pulse rounded-md bg-slate-200" aria-hidden />
       <div className="mt-2 h-3 max-w-[9rem] animate-pulse rounded bg-slate-100" aria-hidden />
@@ -124,7 +123,7 @@ export function DashboardHome() {
       ])
       for (let i = 0; i < rows.length; i++) {
         if (liveLbl.has(rows[i].lbl)) {
-          rows[i] = { ...rows[i], val: t, tr: 'Live index' }
+          rows[i] = { ...rows[i], val: t }
         }
       }
     }
@@ -176,7 +175,6 @@ export function DashboardHome() {
       strip[0] = {
         ...strip[0],
         val: ontologySummary.total_rows.toLocaleString(),
-        trend: 'Live',
         lbl: 'Total resources',
       }
     }
@@ -184,7 +182,6 @@ export function DashboardHome() {
       strip[1] = {
         ...strip[1],
         val: String(ontologySummary.distinct_knowledge_areas),
-        trend: 'Topics',
         lbl: 'Knowledge areas',
       }
     }
@@ -192,7 +189,6 @@ export function DashboardHome() {
       strip[2] = {
         ...strip[2],
         val: String(ontologySummary.distinct_publication_types),
-        trend: 'Formats',
         lbl: 'Publication types',
       }
     }
@@ -241,17 +237,18 @@ export function DashboardHome() {
               className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm transition-shadow hover:shadow-md ${s.orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
                 }`}
             >
-              <div className="mb-2 flex items-start justify-between">
+              <div className="mb-2">
                 <div
                   className="flex size-10 items-center justify-center rounded-lg text-lg"
                   style={{ background: s.bg }}
                 >
                   {s.icon}
                 </div>
-                <span className="text-xs font-semibold text-emerald-700">{s.trend}</span>
               </div>
-              <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
-              <div className="mt-1 text-xs text-mid">{s.lbl}</div>
+              {String(s.val ?? '').trim() ? (
+                <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
+              ) : null}
+              <div className={`text-xs text-mid ${String(s.val ?? '').trim() ? 'mt-1' : ''}`}>{s.lbl}</div>
             </div>
           ))}
       </div>
@@ -270,17 +267,18 @@ export function DashboardHome() {
               className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm transition-shadow hover:shadow-md ${String(s.bg).toLowerCase().includes('orange') ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
                 }`}
             >
-              <div className="mb-2 flex items-start justify-between">
+              <div className="mb-2">
                 <div
                   className="flex size-10 items-center justify-center rounded-lg text-lg"
                   style={{ background: s.bg }}
                 >
                   {s.icon}
                 </div>
-                <span className="text-xs font-semibold text-emerald-700">{s.tr}</span>
               </div>
-              <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
-              <div className="mt-1 text-xs text-mid">{s.lbl}</div>
+              {String(s.val ?? '').trim() ? (
+                <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
+              ) : null}
+              <div className={`text-xs text-mid ${String(s.val ?? '').trim() ? 'mt-1' : ''}`}>{s.lbl}</div>
             </div>
           ))}
       </div>
