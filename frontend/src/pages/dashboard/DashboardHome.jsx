@@ -57,24 +57,7 @@ function dashSlideBg(s) {
   return { background: 'linear-gradient(135deg,#003559,#004a99)' }
 }
 
-function DashboardSpotlightSkeleton() {
-  return (
-    <div
-      className="relative mb-6 overflow-hidden rounded-xl border border-border-sdb bg-sdb-blue-deep text-white shadow-md"
-      aria-busy="true"
-      aria-label="Loading spotlight"
-    >
-      <div className="absolute inset-0 bg-sdb-blue-deep/90" aria-hidden />
-      <div className="relative flex min-h-[200px] flex-col justify-end gap-3 p-6 sm:min-h-[220px]">
-        <div className="mb-2 h-6 w-36 animate-pulse rounded-full bg-white/20" />
-        <div className="h-8 w-full max-w-lg animate-pulse rounded-lg bg-white/15" />
-        <div className="h-3.5 w-full max-w-xl animate-pulse rounded bg-white/10" />
-        <div className="h-3.5 w-full max-w-md animate-pulse rounded bg-white/10" />
-        <p className="mt-2 text-[12px] text-white/55">Loading highlights…</p>
-      </div>
-    </div>
-  )
-}
+
 
 /** Placeholder tiles while ontology summary / role stats are not ready — avoids flashing static wireframe numbers. */
 function DashboardKpiCardSkeleton({ orangeTop }) {
@@ -112,117 +95,7 @@ function DashboardActivitySkeleton() {
   )
 }
 
-function DashboardSpotlightSlider({ slides }) {
-  const len = slides.length
-  const [idx, setIdx] = useState(0)
-  const timerRef = useRef(null)
 
-  const go = useCallback(
-    (i) => {
-      setIdx((prev) => {
-        if (!len) return 0
-        return ((i === undefined ? prev + 1 : i) + len) % len
-      })
-    },
-    [len],
-  )
-
-  const resetTimer = useCallback(() => {
-    window.clearInterval(timerRef.current)
-    if (len > 1) timerRef.current = window.setInterval(() => go(), 6500)
-  }, [go, len])
-
-  useEffect(() => {
-    resetTimer()
-    return () => window.clearInterval(timerRef.current)
-  }, [resetTimer])
-
-  const pause = () => window.clearInterval(timerRef.current)
-  const s = slides[idx]
-
-  if (!len || !s) return null
-
-  return (
-    <div
-      className="relative mb-6 overflow-hidden rounded-xl border border-border-sdb bg-sdb-blue-deep text-white shadow-md"
-      onMouseEnter={pause}
-      onMouseLeave={resetTimer}
-    >
-      <div className="absolute inset-0 bg-sdb-blue-deep/55" aria-hidden />
-      <div className="absolute inset-0 opacity-90" style={dashSlideBg(s)} aria-hidden />
-      <div className="relative flex min-h-[200px] flex-col justify-end gap-3 p-6 sm:min-h-[220px] sm:flex-row sm:items-end sm:justify-between">
-        <div className="max-w-xl">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/20 bg-black/25 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white/90">
-            <span className="size-1.5 rounded-full bg-sdb-orange" aria-hidden />
-            {s.label}
-          </div>
-          <h3 className="font-serif text-xl font-bold leading-tight text-white sm:text-2xl">{s.title}</h3>
-          <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-white/85">{s.lead}</p>
-        </div>
-        <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
-          {s.docUrl ? (
-            <a
-              href={s.docUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg bg-white px-4 py-2 text-center text-sm font-semibold text-sdb-blue-deep no-underline shadow-sm hover:bg-sdb-blue-pale"
-            >
-              Open attachment ↗
-            </a>
-          ) : null}
-          <Link
-            to="/dashboard/resources"
-            className="rounded-lg border border-white/40 bg-white/10 px-4 py-2 text-center text-sm font-semibold text-white no-underline backdrop-blur-sm hover:bg-white/20"
-          >
-            Resource library →
-          </Link>
-        </div>
-      </div>
-      {len > 1 ? (
-        <div className="relative flex items-center justify-between gap-3 border-t border-white/15 bg-black/30 px-4 py-2.5">
-          <div className="flex gap-1.5">
-            {slides.map((sl, k) => (
-              <button
-                key={sl.key ?? k}
-                type="button"
-                aria-label={`Slide ${k + 1}`}
-                className={`h-2 rounded-full transition-all ${idx === k ? 'w-7 bg-sdb-orange' : 'w-2 bg-white/40 hover:bg-white/60'}`}
-                onClick={() => {
-                  setIdx(k)
-                  resetTimer()
-                }}
-              />
-            ))}
-          </div>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              aria-label="Previous spotlight"
-              className="flex size-8 items-center justify-center rounded-lg border border-white/25 bg-black/20 text-white hover:bg-black/35"
-              onClick={() => {
-                go(idx - 1)
-                resetTimer()
-              }}
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              aria-label="Next spotlight"
-              className="flex size-8 items-center justify-center rounded-lg border border-white/25 bg-black/20 text-white hover:bg-black/35"
-              onClick={() => {
-                go(idx + 1)
-                resetTimer()
-              }}
-            >
-              ›
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
-}
 
 export function DashboardHome() {
   const session = getSession()
@@ -291,10 +164,7 @@ export function DashboardHome() {
     }
   }, [])
 
-  const spotlightSlides = useMemo(() => {
-    if (!ontologyRows.length) return []
-    return buildDashboardSpotlightSlides(ontologyRows, { maxSlides: 6 })
-  }, [ontologyRows])
+
 
   const dynamicActivity = useMemo(() => {
     if (!ontologyRows.length) return []
@@ -361,11 +231,7 @@ export function DashboardHome() {
         </div>
       </div>
 
-      {!ontologyLoaded ? (
-        <DashboardSpotlightSkeleton />
-      ) : spotlightSlides.length > 0 ? (
-        <DashboardSpotlightSlider slides={spotlightSlides} />
-      ) : null}
+
 
       <div className="mb-4 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-busy={!ontologyLoaded || undefined}>
         {!ontologyLoaded

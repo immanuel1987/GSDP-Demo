@@ -193,17 +193,6 @@ function HeroSlider({ slides: slidesProp, loading }) {
             style={{ background: 'linear-gradient(135deg,#003559 0%,#004a99 55%,#1f6eb8 100%)' }}
           >
             <div className="hp-slide-img-overlay" />
-            <div className="hp-slide-count">
-              <b>··</b> / ··
-            </div>
-            <div className="hp-slide-copy">
-              <div className="hp-hero-tag">
-                <span className="hp-tag-dot" />
-                Loading catalog…
-              </div>
-              <h1 className="hp-hero-dynamic-title">Fetching spotlight resources</h1>
-              <p className="hp-lead">Please wait while we load the latest items from the ontology index.</p>
-            </div>
           </div>
         </div>
       </div>
@@ -223,12 +212,6 @@ function HeroSlider({ slides: slidesProp, loading }) {
             >
               {/* Dark overlay so text stays legible on photos */}
               <div className="hp-slide-img-overlay" />
-              <div className="hp-slide-count"><b>{String(k + 1).padStart(2, '0')}</b> / {String(slidesForRender.length).padStart(2, '0')}</div>
-              <div className="hp-slide-copy">
-                <div className="hp-hero-tag"><span className="hp-tag-dot" />{s.label}</div>
-                <h1 className="hp-hero-dynamic-title">{s.title}</h1>
-                <p className="hp-lead">{s.lead}</p>
-              </div>
             </div>
           )
         })}
@@ -875,59 +858,10 @@ export function PublicHomePage() {
               </button>
             </div>
             <button type="button" className="hp-map-mini hp-map-mini--clickable" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')} aria-label="Explore map — sign in to open the full map">
-              <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMid meet" className="hp-map-svg" aria-hidden>
-                <defs>
-                  <linearGradient id="hp-map-ocean" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#d8ecfc" />
-                    <stop offset="100%" stopColor="#b8daf4" />
-                  </linearGradient>
-                  <filter id="hp-map-glow" x="-40%" y="-40%" width="180%" height="180%">
-                    <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodOpacity="0.35" />
-                  </filter>
-                </defs>
-                <rect width="400" height="220" fill="url(#hp-map-ocean)" rx="4" />
-                <g stroke="#8aa4bd" strokeWidth="0.35" opacity="0.45">
-                  <line x1="0" y1="55" x2="400" y2="55" strokeDasharray="3 5" />
-                  <line x1="0" y1="110" x2="400" y2="110" strokeDasharray="3 5" />
-                  <line x1="0" y1="165" x2="400" y2="165" strokeDasharray="3 5" />
-                  <line x1="100" y1="0" x2="100" y2="220" strokeDasharray="3 5" />
-                  <line x1="200" y1="0" x2="200" y2="220" strokeDasharray="3 5" />
-                  <line x1="300" y1="0" x2="300" y2="220" strokeDasharray="3 5" />
-                </g>
-                <g fill="#e8efe6" stroke="#6b8cae" strokeWidth="1.1" strokeLinejoin="round">
-                  <path d="M30,40 Q40,30 70,35 L95,55 L100,80 Q90,95 70,95 L50,90 L35,75 Q25,60 30,40 Z" />
-                  <path d="M85,105 L100,105 L105,140 L95,170 L80,165 L78,135 Z" />
-                  <path d="M180,40 Q195,32 215,38 L225,55 L215,68 L195,70 L180,60 Z" />
-                  <path d="M195,75 L225,80 L230,115 L220,150 L205,160 L185,140 L185,105 Z" />
-                  <path d="M230,35 Q260,28 310,38 L340,55 L335,90 L310,100 L275,95 L240,80 L228,55 Z" />
-                  <path d="M275,95 L290,95 L292,120 L283,128 L275,115 Z" />
-                  <path d="M310,140 L350,138 L355,158 L325,165 L308,155 Z" />
-                </g>
-                <g fontFamily="'JetBrains Mono', ui-monospace, monospace" fontWeight="600">
-                  <g filter="url(#hp-map-glow)">
-                    <circle cx="200" cy="58" r="10" fill="#e67e22" opacity="0.22" />
-                    <circle cx="200" cy="58" r="5" fill="#e67e22" stroke="#fff" strokeWidth="1.5" />
-                    <text x="200" y="42" textAnchor="middle" fontSize="10" fill="#0a2540">Valdocco · HQ</text>
-                  </g>
-                  <g filter="url(#hp-map-glow)">
-                    <circle cx="283" cy="112" r="11" fill="#1f6eb8" opacity="0.22" />
-                    <circle cx="283" cy="112" r="5.5" fill="#1f6eb8" stroke="#fff" strokeWidth="1.5" />
-                    <text x="283" y="132" textAnchor="middle" fontSize="10" fill="#0a2540">South Asia pilot</text>
-                  </g>
-                  <circle cx="65" cy="72" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                  <circle cx="92" cy="138" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                  <circle cx="212" cy="122" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                  <circle cx="322" cy="82" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                  <circle cx="337" cy="158" r="4" fill="#1a8a6e" stroke="#fff" strokeWidth="1.2" />
-                  <circle cx="55" cy="56" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-                  <circle cx="182" cy="52" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-                  <circle cx="242" cy="72" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-                  <circle cx="202" cy="138" r="3.5" fill="#c9a227" stroke="#fff" strokeWidth="1" />
-                </g>
-                <text x="200" y="208" textAnchor="middle" fontFamily="'JetBrains Mono', ui-monospace, monospace" fontSize="9" fill="#3d5a78" opacity="0.85">
-                  Stylised overview · sign in for interactive map
-                </text>
-              </svg>
+              <img src="/assets/south_asia_map.png" alt="South Asia Pilot Map" className="hp-map-real" />
+              <div className="hp-map-overlay">
+                <div className="hp-map-overlay-text">Live Satellite Overview · sign in for interactive map</div>
+              </div>
             </button>
             <div className="hp-map-foot">
               <div className="hp-map-legend">
