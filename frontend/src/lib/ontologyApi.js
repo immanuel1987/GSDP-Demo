@@ -165,7 +165,7 @@ export function resourceDocumentUrl(resource) {
  * @returns {'pdf' | 'image' | 'none'}
  */
 export function inferDocumentKindFromOntology(docUrl, row) {
-  const ff = String(row?.file_format || '').toLowerCase()
+  const ff = String(row?.file_format || row?.hasFileFormat || '').toLowerCase()
   const mt = String(row?.media_type || '').toLowerCase()
   const tp = String(row?.type || '').toLowerCase()
   const blob = `${ff} ${mt} ${tp}`
@@ -183,6 +183,32 @@ export function inferDocumentKindFromOntology(docUrl, row) {
   if (path.includes('.pdf') || /[^/]\.pdf$/i.test(path)) return 'pdf'
   if (/\.(png|jpe?g|gif|webp|svg|bmp|avif|tiff?)(?:$|[?#])/i.test(path)) return 'image'
   return 'none'
+}
+
+/** True when ontology row is classified as a PDF (metadata and/or URL). */
+export function isOntologyRowPdf(row) {
+  if (!row || typeof row !== 'object') return false
+  const docUrl = pickDocumentUrlFromOntologyRow(row)
+  return inferDocumentKindFromOntology(docUrl, row) === 'pdf'
+}
+
+/**
+ * Recent-resource cards: newest PDF rows only (by ingestion / publish / created dates).
+ * Returns objects shaped by {@link mapOntologyRowToResource}.
+ */
+export function buildRecentPdfResourcesFromOntologyRows(rows, { limit = 4 } = {}) {
+  if (!Array.isArray(rows) || !rows.length) return []
+
+  const dated = rows
+    .filter((row) => isOntologyRowPdf(row))
+    .map((row) => {
+      const raw = row.ingestion_time || row.updated_at || row.publish_date || row.date_created || row.created_at || ''
+      const t = new Date(raw).getTime()
+      return { row, t: Number.isFinite(t) ? t : 0 }
+    })
+    .sort((a, b) => b.t - a.t)
+
+  return dated.slice(0, limit).map((x, i) => mapOntologyRowToResource(x.row, i))
 }
 
 /** Kind for filter + display (uses docKind from API map when present). */

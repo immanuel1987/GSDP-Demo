@@ -63,9 +63,8 @@ function dashSlideBg(s) {
 function DashboardKpiCardSkeleton({ orangeTop }) {
   return (
     <div
-      className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm ${
-        orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
-      }`}
+      className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm ${orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
+        }`}
       aria-busy="true"
     >
       <div className="mb-2 flex items-start justify-between">
@@ -141,24 +140,24 @@ export function DashboardHome() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        const [ont, sum] = await Promise.all([
-          fetchOntologyRows({ limit: 24, offset: 0 }),
-          fetchOntologySummary().catch(() => null),
-        ])
-        if (cancelled) return
-        setOntologyRows(Array.isArray(ont?.data) ? ont.data : [])
-        setOntologySummary(sum && typeof sum === 'object' ? sum : null)
-      } catch {
-        if (!cancelled) {
-          setOntologyRows([])
-          setOntologySummary(null)
+      ; (async () => {
+        try {
+          const [ont, sum] = await Promise.all([
+            fetchOntologyRows({ limit: 24, offset: 0 }),
+            fetchOntologySummary().catch(() => null),
+          ])
+          if (cancelled) return
+          setOntologyRows(Array.isArray(ont?.data) ? ont.data : [])
+          setOntologySummary(sum && typeof sum === 'object' ? sum : null)
+        } catch {
+          if (!cancelled) {
+            setOntologyRows([])
+            setOntologySummary(null)
+          }
+        } finally {
+          if (!cancelled) setOntologyLoaded(true)
         }
-      } finally {
-        if (!cancelled) setOntologyLoaded(true)
-      }
-    })()
+      })()
     return () => {
       cancelled = true
     }
@@ -237,55 +236,53 @@ export function DashboardHome() {
         {!ontologyLoaded
           ? PLATFORM_KPI_STRIP.map((s, i) => <DashboardKpiCardSkeleton key={`plat-skel-${i}`} orangeTop={!!s.orangeTop} />)
           : platformKpis.map((s) => (
-              <div
-                key={s.lbl}
-                className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm transition-shadow hover:shadow-md ${
-                  s.orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
+            <div
+              key={s.lbl}
+              className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm transition-shadow hover:shadow-md ${s.orangeTop ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
                 }`}
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div
-                    className="flex size-10 items-center justify-center rounded-lg text-lg"
-                    style={{ background: s.bg }}
-                  >
-                    {s.icon}
-                  </div>
-                  <span className="text-xs font-semibold text-emerald-700">{s.trend}</span>
+            >
+              <div className="mb-2 flex items-start justify-between">
+                <div
+                  className="flex size-10 items-center justify-center rounded-lg text-lg"
+                  style={{ background: s.bg }}
+                >
+                  {s.icon}
                 </div>
-                <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
-                <div className="mt-1 text-xs text-mid">{s.lbl}</div>
+                <span className="text-xs font-semibold text-emerald-700">{s.trend}</span>
               </div>
-            ))}
+              <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
+              <div className="mt-1 text-xs text-mid">{s.lbl}</div>
+            </div>
+          ))}
       </div>
 
       <div className="mb-6 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-busy={!ontologyLoaded || undefined}>
         {!ontologyLoaded
           ? stats.map((s, i) => (
-              <DashboardKpiCardSkeleton
-                key={`role-skel-${i}`}
-                orangeTop={String(s.bg).toLowerCase().includes('orange')}
-              />
-            ))
+            <DashboardKpiCardSkeleton
+              key={`role-skel-${i}`}
+              orangeTop={String(s.bg).toLowerCase().includes('orange')}
+            />
+          ))
           : stats.map((s, i) => (
-              <div
-                key={`${s.lbl}-${i}`}
-                className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm transition-shadow hover:shadow-md ${
-                  String(s.bg).toLowerCase().includes('orange') ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
+            <div
+              key={`${s.lbl}-${i}`}
+              className={`rounded-xl border border-border-sdb bg-white px-[18px] pb-4 pt-[17px] shadow-sm transition-shadow hover:shadow-md ${String(s.bg).toLowerCase().includes('orange') ? 'border-t-[3px] border-t-sdb-orange' : 'border-t-[3px] border-t-sdb-blue-light'
                 }`}
-              >
-                <div className="mb-2 flex items-start justify-between">
-                  <div
-                    className="flex size-10 items-center justify-center rounded-lg text-lg"
-                    style={{ background: s.bg }}
-                  >
-                    {s.icon}
-                  </div>
-                  <span className="text-xs font-semibold text-emerald-700">{s.tr}</span>
+            >
+              <div className="mb-2 flex items-start justify-between">
+                <div
+                  className="flex size-10 items-center justify-center rounded-lg text-lg"
+                  style={{ background: s.bg }}
+                >
+                  {s.icon}
                 </div>
-                <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
-                <div className="mt-1 text-xs text-mid">{s.lbl}</div>
+                <span className="text-xs font-semibold text-emerald-700">{s.tr}</span>
               </div>
-            ))}
+              <div className="font-serif text-[26px] font-bold leading-none text-sdb-blue-deep">{s.val}</div>
+              <div className="mt-1 text-xs text-mid">{s.lbl}</div>
+            </div>
+          ))}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">

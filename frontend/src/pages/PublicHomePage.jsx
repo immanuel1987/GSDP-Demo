@@ -7,11 +7,11 @@ import {
   buildCollectionCardsFromOntologyRows,
   buildHeroSlidesFromOntologyRows,
   buildNewsItemsFromOntologyRows,
+  buildRecentPdfResourcesFromOntologyRows,
   buildTrendingFromOntologyRows,
   fetchOntologyRows,
   fetchOntologySummary,
   formatOntologyFreshness,
-  mapOntologyRowToResource,
 } from '../lib/ontologyApi'
 import gsdpIntroVideoUrl from '../assets/viedo/AI_Platform_Video_Generation_Request.mp4'
 import { ResourceDetailModal } from './dashboard/dashboardViews'
@@ -36,6 +36,18 @@ const HOME_SECTION_TO_DASHBOARD = {
 
 function navigateLoginNext(navigate, nextPath) {
   navigate('/login', { state: { next: nextPath } })
+}
+
+/** Hero slider data only — independent of recent-resource card selection. */
+function buildPublicHomeHeroSlides(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null
+  const built = buildHeroSlidesFromOntologyRows(rows, { maxSlides: 6 })
+  return built.length ? built : null
+}
+
+/** Recent resources strip: PDF documents only, newest first. */
+function buildPublicHomeRecentPdfResources(rows) {
+  return buildRecentPdfResourcesFromOntologyRows(rows, { limit: 4 })
 }
 
 // ── Fallback slide data (when API is empty or unreachable) ─────────────────
@@ -521,11 +533,12 @@ export function PublicHomePage() {
         ? catalogTotal.toLocaleString()
         : '—'
 
-  const heroSlides = useMemo(() => {
-    if (!Array.isArray(homeRows) || homeRows.length === 0) return null
-    const built = buildHeroSlidesFromOntologyRows(homeRows, { maxSlides: 6 })
-    return built.length ? built : null
-  }, [homeRows])
+  const heroSlides = useMemo(() => buildPublicHomeHeroSlides(homeRows), [homeRows])
+
+  const recentPdfResources = useMemo(() => {
+    if (!homeFetchDone) return []
+    return buildPublicHomeRecentPdfResources(Array.isArray(homeRows) ? homeRows : [])
+  }, [homeFetchDone, homeRows])
 
   const newsItems = useMemo(() => {
     if (!homeFetchDone) return []
@@ -882,7 +895,7 @@ export function PublicHomePage() {
           <div className="hp-res-h">
             <div>
               <h2>Recent resources</h2>
-              <div className="sub">Latest documents catalogued on the platform</div>
+              <div className="sub">Latest PDF documents catalogued on the platform</div>
             </div>
             <button type="button" className="hp-col-all" onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}>
               See more →
@@ -897,24 +910,20 @@ export function PublicHomePage() {
                   <div className="hp-skel-line hp-skel-line--xs" />
                 </div>
               ))
-            ) : ontologyBlock?.data?.length > 0 ? (
-              ontologyBlock.data.slice(0, 4).map((raw, i) => {
-                const r = mapOntologyRowToResource(raw, i)
-                return (
-                  <div key={r.document_id || i} className="hp-res-card" onClick={() => setSelectedResource(r)}>
-
-                    <div className="ti">{r.title}</div>
-                    <div className="ct">
-                      {r.author && r.author !== '—' ? r.author :
-                        r.publisher ? r.publisher :
-                          'Don Bosco South Asia'}
-                    </div>
+            ) : recentPdfResources.length > 0 ? (
+              recentPdfResources.map((r) => (
+                <div key={r.id} className="hp-res-card" onClick={() => setSelectedResource(r)}>
+                  <div className="ti">{r.title}</div>
+                  <div className="ct">
+                    {r.author && r.author !== '—' ? r.author :
+                      r.publisher ? r.publisher :
+                        'Don Bosco South Asia'}
                   </div>
-                )
-              })
+                </div>
+              ))
             ) : (
               <div className="hp-res-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#5a7aa0' }}>
-                No resources available at the moment.
+                No PDF resources available at the moment.
               </div>
             )}
           </div>

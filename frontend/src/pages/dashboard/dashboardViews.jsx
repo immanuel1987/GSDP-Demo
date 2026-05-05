@@ -207,7 +207,7 @@ export function ResourcesView() {
   const [f, setF] = useState({
     theme: '',
     type: '',
-    docMedia: '',
+    docMedia: 'pdf',
     province: '',
     region: '',
     lang: '',
@@ -281,7 +281,7 @@ export function ResourcesView() {
     setF({
       theme: '',
       type: '',
-      docMedia: '',
+      docMedia: 'pdf',
       province: '',
       region: '',
       lang: '',
@@ -352,16 +352,7 @@ export function ResourcesView() {
             </option>
           ))}
         </select>
-        <select
-          className={sel}
-          value={f.docMedia}
-          onChange={(e) => setF((s) => ({ ...s, docMedia: e.target.value }))}
-          aria-label="Document file type"
-        >
-          <option value="">All documents</option>
-          <option value="pdf">PDF only</option>
-          <option value="image">Image only</option>
-        </select>
+
         <select
           className={sel}
           value={f.province}

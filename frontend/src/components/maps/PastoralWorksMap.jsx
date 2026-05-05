@@ -161,8 +161,22 @@ function colorForType(type) {
 
 /**
  * Live Leaflet map: markers follow `institutions` (e.g. filtered pastoral works). Updates when props change.
+ * @param {object} [opts]
+ * @param {boolean} [opts.embed] — compact rounded frame for public homepage / inline cards (not dashboard footer radius).
+ * @param {string} [opts.className] — extra classes on the outer shell.
+ * @param {boolean} [opts.showPinCount] — show bottom-left pin count strip (default true).
+ * @param {string} [opts.emptyTitle] — copy when there are no institutions.
+ * @param {string} [opts.emptyHint] — secondary line for empty state.
  */
-export function PastoralWorksMap({ institutions, loading }) {
+export function PastoralWorksMap({
+  institutions,
+  loading,
+  embed = false,
+  className = '',
+  showPinCount = true,
+  emptyTitle = 'No locations for current filters',
+  emptyHint = 'Adjust search or filters to show institutions on the map.',
+}) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const groupRef = useRef(null)
@@ -301,10 +315,14 @@ export function PastoralWorksMap({ institutions, loading }) {
     }
   }, [])
 
+  const radius = embed ? 'rounded-[14px]' : 'rounded-b-xl'
+  const minH = embed ? 'min-h-[240px]' : 'min-h-[280px]'
+  const mapH = embed ? 'h-[272px]' : 'h-[min(360px,55vh)]'
+
   if (loading) {
     return (
       <div
-        className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-b-xl bg-gradient-to-b from-slate-100 to-slate-200/90 px-4"
+        className={`flex ${minH} flex-col items-center justify-center gap-3 ${radius} bg-gradient-to-b from-slate-100 to-slate-200/90 px-4 ${className}`}
         aria-busy="true"
       >
         <div className="size-10 animate-pulse rounded-full bg-slate-300/80" />
@@ -315,20 +333,22 @@ export function PastoralWorksMap({ institutions, loading }) {
 
   if (!institutions.length) {
     return (
-      <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 rounded-b-xl bg-gradient-to-b from-[#eef5fc] to-[#d6e8f7] px-6 text-center">
+      <div
+        className={`flex ${minH} flex-col items-center justify-center gap-2 ${radius} bg-gradient-to-b from-[#eef5fc] to-[#d6e8f7] px-6 text-center ${className}`}
+      >
         <span className="text-2xl" aria-hidden>
           🗺
         </span>
-        <p className="text-sm font-semibold text-sdb-blue-deep">No locations for current filters</p>
-        <p className="max-w-sm text-xs text-mid">Adjust search or filters to show institutions on the map.</p>
+        <p className="text-sm font-semibold text-sdb-blue-deep">{emptyTitle}</p>
+        <p className="max-w-sm text-xs text-mid">{emptyHint}</p>
       </div>
     )
   }
 
   return (
-    <div className="relative z-0 h-[min(360px,55vh)] min-h-[280px] w-full overflow-hidden rounded-b-xl bg-[#dce8f7]">
+    <div className={`relative z-0 ${mapH} ${minH} w-full overflow-hidden ${radius} bg-[#dce8f7] ${className}`}>
       {/* Explicit block height so Leaflet can request tiles; absolute-only parents often break tile layout */}
-      <div ref={containerRef} className="h-full min-h-[280px] w-full" />
+      <div ref={containerRef} className={`h-full ${minH} w-full`} />
       <div className="pointer-events-auto absolute top-2 right-2 z-[400]">
         <button
           type="button"
@@ -339,9 +359,11 @@ export function PastoralWorksMap({ institutions, loading }) {
           South Asia view
         </button>
       </div>
-      <div className="pointer-events-none absolute bottom-2 left-2 z-[400] max-w-[min(100%,20rem)] rounded-md border border-white/60 bg-white/90 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm">
-        {institutions.length} pin{institutions.length !== 1 ? 's' : ''} · province centroids (approx.)
-      </div>
+      {showPinCount ? (
+        <div className="pointer-events-none absolute bottom-2 left-2 z-[400] max-w-[min(100%,20rem)] rounded-md border border-white/60 bg-white/90 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm">
+          {institutions.length} pin{institutions.length !== 1 ? 's' : ''} · province centroids (approx.)
+        </div>
+      ) : null}
     </div>
   )
 }
