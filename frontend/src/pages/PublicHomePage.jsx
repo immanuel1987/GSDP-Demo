@@ -204,7 +204,6 @@ function HeroSlider({ slides: slidesProp, loading }) {
             className="hp-slide hp-s1 active"
             style={{ background: 'linear-gradient(135deg,#003559 0%,#004a99 55%,#1f6eb8 100%)' }}
           >
-            <div className="hp-slide-img-overlay" />
           </div>
         </div>
       </div>
@@ -222,8 +221,6 @@ function HeroSlider({ slides: slidesProp, loading }) {
               className={`hp-slide ${s.cls}${idx === k ? ' active' : ''}`}
               style={bgStyle}
             >
-              {/* Dark overlay so text stays legible on photos */}
-              <div className="hp-slide-img-overlay" />
             </div>
           )
         })}
