@@ -4,12 +4,8 @@ services:
   backend:
     build: .
     container_name: gsdp_backend
-    ports:
-      - "2005:2005"
     volumes:
       - .:/app
-      # Exclude specific folders from being overwitten by host volume if needed, 
-      # such as local virtual environments
       - /app/env
     env_file:
       - .env
@@ -17,3 +13,25 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     command: uvicorn main:app --host 0.0.0.0 --port 2005 --reload
+    labels:
+      - "traefik.enable=true"
+
+      # Router for gsdpapi domain
+      - "traefik.http.routers.gsdpapi.rule=Host(`gsdpapi.boscosofttech.com`)"
+      - "traefik.http.routers.gsdpapi.entrypoints=websecure"
+      - "traefik.http.routers.gsdpapi.tls.certresolver=mytlschallenge"
+      - "traefik.http.services.gsdpapi.loadbalancer.server.port=2005"
+
+      # Optional: force HTTP → HTTPS redirection
+      - "traefik.http.routers.gsdpapi-http.rule=Host(`gsdpapi.boscosofttech.com`)"
+      - "traefik.http.routers.gsdpapi-http.entrypoints=web"
+      - "traefik.http.routers.gsdpapi-http.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+    networks:
+      - n8n-docker_web
+
+networks:
+  n8n-docker_web:
+    external: true
+
