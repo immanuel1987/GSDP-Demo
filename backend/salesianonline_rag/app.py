@@ -921,16 +921,16 @@ def create_app():
                 )
 
         # ── Example questions accordion ──────────────────────
-        with gr.Accordion(
-            "\U0001F4A1  Example questions — click any to get started",
-            open=True,
-            elem_classes=["rag-accordion", "side-inset"],
-        ):
-            gr.Examples(
-                examples=[[q] for q in EXAMPLE_QUERIES],
-                inputs=query_input,
-                label="",
-            )
+        # with gr.Accordion(
+        #     "\U0001F4A1  Example questions — click any to get started",
+        #     open=True,
+        #     elem_classes=["rag-accordion", "side-inset"],
+        # ):
+        #     gr.Examples(
+        #         examples=[[q] for q in EXAMPLE_QUERIES],
+        #         inputs=query_input,
+        #         label="",
+        #     )
 
         # ── Footer ──────────────────────────────────────────
         gr.Markdown(
@@ -939,7 +939,6 @@ def create_app():
             "<div class='footer-sub'>"
             "Powered by <strong>Bosco Soft Technologies Pvt Ltd</strong> &nbsp;&middot;&nbsp; "
             "Multilingual Salesian Knowledge Corpus &nbsp;&middot;&nbsp; "
-            "Built with Databricks &amp; Gradio"
             "</div>"
             "</div>",
             sanitize_html=False,
