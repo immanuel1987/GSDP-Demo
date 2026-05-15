@@ -306,6 +306,19 @@ CUSTOM_CSS = """
 .gradio-container > .wrap > .contain > footer,
 .gradio-container footer { display: none !important; }
 
+/* ── Remove all scrollbars ── */
+*,
+*::before,
+*::after {
+    scrollbar-width: none !important;   /* Firefox */
+    -ms-overflow-style: none !important; /* IE / Edge */
+}
+*::-webkit-scrollbar {
+    display: none !important;           /* Chrome / Safari / Gradio iframe */
+    width: 0 !important;
+    height: 0 !important;
+}
+
 /* ── Base container ── */
 .gradio-container {
     --blue-900: #051a30;
@@ -366,17 +379,22 @@ CUSTOM_CSS = """
     padding: 0 1.5rem 2.5rem !important;
 }
 
-/* ── Top nav ── */
-.rag-top-nav-html {
+
+/* ── Top nav bar ── */
+.top-nav-bar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    position: absolute;
-    right: 1.5rem;
-    top: 1.5rem;
-    z-index: 100;
+    justify-content: space-between;
+    padding: 0.65rem 1.75rem;
+    background: rgba(255,255,255,.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 6px rgba(8,28,56,.05);
+    width: 100%;
+    box-sizing: border-box;
 }
-.rag-home-link {
+.top-nav-home {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
@@ -384,49 +402,39 @@ CUSTOM_CSS = """
     font-size: 0.875rem;
     color: var(--blue-800);
     text-decoration: none;
-    padding: 0.38rem 0.95rem;
+    padding: 0.35rem 0.9rem;
     border-radius: 8px;
     border: 1.5px solid var(--border-2);
     background: var(--surface);
     box-shadow: var(--shadow-sm);
     transition: all .15s ease;
-    letter-spacing: .01em;
+    white-space: nowrap;
 }
-.rag-home-link:hover {
+.top-nav-home:hover {
     background: var(--blue-50);
     border-color: var(--blue-400);
     color: var(--blue-600);
     text-decoration: none;
 }
-.rag-nav-brand {
+.top-nav-brand {
     font-weight: 700;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     color: var(--blue-600);
     letter-spacing: .01em;
+    white-space: nowrap;
 }
 
 /* ── Hero header ── */
 .header-section {
     position: relative !important;
-    overflow: hidden !important;
     background: linear-gradient(118deg, #061526 0%, #0a2d54 30%, #093368 55%, #0d4a8f 80%, #004a99 100%) !important;
-    padding: 2.8rem 2.5rem 2.4rem !important;
+    padding: 1.4rem 2rem 1.3rem !important;
     border-radius: var(--radius-lg) !important;
-    margin: 1rem 1.5rem 1.75rem !important;
+    margin: 0.75rem 1.5rem 1.25rem !important;
     border: none !important;
-    box-shadow: 0 8px 32px -4px rgba(0,74,153,.35), 0 2px 8px rgba(8,28,56,.2) !important;
+    box-shadow: 0 6px 24px -4px rgba(0,74,153,.30), 0 2px 6px rgba(8,28,56,.15) !important;
 }
 
-/* decorative blobs */
-.header-section::before {
-    content: "" !important;
-    position: absolute !important;
-    inset: 0 !important;
-    background:
-        radial-gradient(ellipse 55% 70% at 90% 50%, rgba(77,159,212,.18) 0%, transparent 60%),
-        radial-gradient(ellipse 35% 50% at 10% 80%, rgba(255,255,255,.05) 0%, transparent 55%) !important;
-    pointer-events: none !important;
-}
 
 /* dot-grid texture */
 .header-section::after {
@@ -440,41 +448,101 @@ CUSTOM_CSS = """
 
 .header-section > * { position: relative !important; z-index: 1 !important; }
 
-.header-section h1 {
-    color: #ffffff !important;
-    font-size: 2.1rem !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.03em !important;
-    line-height: 1.15 !important;
-    margin: 0 !important;
-    text-shadow: 0 2px 12px rgba(0,0,0,.25) !important;
+/* hero inner wrapper — centers everything */
+.hero-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
 }
 
+/* Home link row — sits above the title */
+.hero-home-row {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    margin-bottom: 0.6rem;
+}
+.hero-home-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: rgba(220,238,255,.95);
+    text-decoration: none;
+    padding: 0.3rem 0.85rem;
+    border-radius: 99px;
+    border: 1.5px solid rgba(255,255,255,.3);
+    background: rgba(255,255,255,.12);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all .18s ease;
+    white-space: nowrap;
+}
+.hero-home-link:hover {
+    background: rgba(255,255,255,.22);
+    border-color: rgba(255,255,255,.6);
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.hero-title {
+    color: #ffffff !important;
+    font-size: 1.55rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.025em !important;
+    line-height: 1.2 !important;
+    margin: 0 0 0.35rem !important;
+    text-shadow: 0 2px 10px rgba(0,0,0,.22) !important;
+}
+.hero-desc {
+    color: rgba(210,230,255,.88) !important;
+    font-size: 0.9rem !important;
+    margin: 0 !important;
+    max-width: 46rem !important;
+    line-height: 1.55 !important;
+}
+
+/* override old h1/p inside header-section if Gradio injects them */
+.header-section h1 {
+    color: #ffffff !important;
+    font-size: 1.55rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.025em !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    text-shadow: 0 2px 10px rgba(0,0,0,.22) !important;
+    text-align: center !important;
+}
 .header-section p {
-    color: rgba(210,230,255,.92) !important;
-    font-size: 1.02rem !important;
-    margin-top: 0.5rem !important;
+    color: rgba(210,230,255,.88) !important;
+    font-size: 0.9rem !important;
+    margin-top: 0.3rem !important;
     max-width: 50rem !important;
-    line-height: 1.6 !important;
+    line-height: 1.55 !important;
+    text-align: center !important;
 }
 
 /* badge strip */
 .header-badges {
     display: flex !important;
     flex-wrap: wrap !important;
-    gap: 0.45rem !important;
-    margin-top: 1.1rem !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+    margin-top: 0.7rem !important;
 }
 .hbadge {
     display: inline-flex !important;
     align-items: center !important;
-    gap: 0.3rem !important;
-    padding: 0.28rem 0.72rem !important;
+    gap: 0.25rem !important;
+    padding: 0.18rem 0.55rem !important;
     border-radius: 99px !important;
     background: rgba(255,255,255,.12) !important;
-    border: 1px solid rgba(255,255,255,.22) !important;
-    color: rgba(220,238,255,.95) !important;
-    font-size: 0.78rem !important;
+    border: 1px solid rgba(255,255,255,.2) !important;
+    color: rgba(220,238,255,.92) !important;
+    font-size: 0.72rem !important;
     font-weight: 600 !important;
     backdrop-filter: blur(6px) !important;
     letter-spacing: .01em !important;
@@ -785,15 +853,116 @@ CUSTOM_CSS = """
 
 .progress-bar-wrap,
 .generating { border-radius: 8px !important; }
-"""
 
-EXAMPLE_QUERIES = [
-    "What is the Preventive System methodology in Salesian education?",
-    "Summarize the focus group guide content",
-    "What topics are covered in the English audio recordings?",
-    "Describe the questionnaire (Vademecum) structure",
-    "What languages is the educational content available in?",
-]
+/* ============================================================
+   RESPONSIVE — Tablet  (641 px – 1024 px)
+   ============================================================ */
+@media (max-width: 1024px) {
+    .top-nav-bar   { padding: 0.6rem 1.25rem; }
+    .top-nav-home  { font-size: 0.84rem; padding: 0.3rem 0.75rem; }
+    .top-nav-brand { font-size: 0.84rem; }
+
+    .header-section {
+        margin: 0.6rem 1rem 1.1rem !important;
+        padding: 1.1rem 1.5rem 1rem !important;
+    }
+    .hero-title        { font-size: 1.35rem !important; }
+    .header-section h1 { font-size: 1.35rem !important; }
+    .search-card  { margin: 0 1rem 0.9rem !important; padding: 1rem 1.1rem !important; }
+    .toolbar-row  { margin: 0 1rem 1rem !important; padding: 0.7rem 1rem !important; }
+    .content-row,
+    .side-inset   { margin-left: 1rem !important; margin-right: 1rem !important; }
+    .footer       { margin: 0.9rem 1rem 0 !important; }
+}
+
+/* ============================================================
+   RESPONSIVE — Mobile  (≤ 640 px)
+   ============================================================ */
+@media (max-width: 640px) {
+
+    /* Nav bar — mobile */
+    .top-nav-bar {
+        padding: 0.5rem 0.9rem;
+        gap: 0.4rem;
+    }
+    .top-nav-home {
+        font-size: 0.78rem;
+        padding: 0.28rem 0.65rem;
+        border-radius: 7px;
+    }
+    .top-nav-brand { font-size: 0.76rem; }
+
+    /* Hero */
+    .header-section {
+        margin: 0.4rem 0.6rem 0.85rem !important;
+        padding: 1rem 0.9rem 0.95rem !important;
+        border-radius: var(--radius-md) !important;
+    }
+    .hero-title        { font-size: 1.15rem !important; letter-spacing: -0.01em !important; }
+    .hero-desc         { font-size: 0.82rem !important; }
+    .header-section h1 { font-size: 1.15rem !important; }
+    .header-section p  { font-size: 0.82rem !important; }
+    .header-badges     { gap: 0.3rem !important; margin-top: 0.75rem !important; }
+    .hbadge            { font-size: 0.7rem !important; padding: 0.2rem 0.5rem !important; }
+    .hero-home-link    { font-size: 0.75rem !important; padding: 0.25rem 0.6rem !important; }
+
+    /* Search card */
+    .search-card {
+        margin: 0 0.6rem 0.75rem !important;
+        padding: 0.85rem 0.85rem !important;
+        border-radius: var(--radius-sm) !important;
+    }
+
+    /* Search buttons — full-width stack */
+    .gradio-container button.primary,
+    .gradio-container .lg.primary,
+    .gradio-container button.secondary {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* Toolbar — stack dropdown above radio */
+    .toolbar-row {
+        margin: 0 0.6rem 0.75rem !important;
+        padding: 0.7rem 0.85rem !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 0.7rem !important;
+    }
+
+    /* Radio — wrap tightly */
+    .gradio-container .radio-group { flex-wrap: wrap !important; gap: 0.3rem !important; }
+    .gradio-container .radio-group label {
+        flex: 0 0 auto !important;
+        font-size: 0.78rem !important;
+    }
+
+    /* Content — stack answer above sources */
+    .content-row {
+        flex-direction: column !important;
+        margin-left: 0.6rem !important;
+        margin-right: 0.6rem !important;
+    }
+    .content-row > * { width: 100% !important; min-width: 0 !important; flex: none !important; }
+
+    .chat-area {
+        padding: 1rem !important;
+        min-height: 150px !important;
+        border-radius: var(--radius-sm) !important;
+    }
+    .sources-panel {
+        border-radius: var(--radius-sm) !important;
+        padding: 0.85rem 0.9rem 1rem !important;
+        margin-top: 0.7rem !important;
+        height: auto !important;
+    }
+
+    .side-inset { margin-left: 0.6rem !important; margin-right: 0.6rem !important; }
+    .footer     { margin: 0.8rem 0.6rem 0 !important; font-size: 0.73rem !important; }
+
+    .gradio-container textarea { font-size: 0.94rem !important; }
+}
+"""
 
 
 def create_app():
@@ -829,23 +998,22 @@ def create_app():
 
         # ── Hero header ─────────────────────────────────────
         with gr.Column(elem_classes="header-section"):
-            gr.Markdown(
-                # Title and description
-                "# \U0001F50D&nbsp; GSDP Semantic Search\n\n"
-                "AI-powered search and Q&A over the Salesian multilingual knowledge base — "
-                "PDFs, audio recordings, images, and video content across five languages."
-                "\n\n"
-                "<div class='header-badges'>"
-                "<span class='hbadge'>\U0001F4C4 PDF Documents</span>"
-                "<span class='hbadge'>\U0001F3A7 Audio</span>"
-                "<span class='hbadge'>\U0001F5BC\uFE0F Images</span>"
-                "<span class='hbadge'>\U0001F3A5 Video</span>"
-                "<span class='hbadge'>\U0001F310 5 Languages</span>"
-                "</div>"
-                "<nav class='rag-top-nav-html'>"
-                f"<a href='{GSDP_HOME_URL}' class='rag-home-link'>&#8592; Home</a>"
-                "</nav>",
-                sanitize_html=False,
+            gr.HTML(
+                f"<div class='hero-inner'>"
+                f"<div class='hero-home-row'>"
+                f"<a href='{GSDP_HOME_URL}' class='hero-home-link'>&#8592; Home</a>"
+                f"</div>"
+                f"<h1 class='hero-title'>GSDP Semantic Search</h1>"
+                f"<p class='hero-desc'>AI-powered search and Q&amp;A over the Salesian multilingual knowledge base &mdash; "
+                f"PDFs, audio recordings, images, and video content across five languages.</p>"
+                f"<div class='header-badges'>"
+                f"<span class='hbadge'>&#128196; PDF Documents</span>"
+                f"<span class='hbadge'>&#127911; Audio</span>"
+                f"<span class='hbadge'>&#128444;&#65039; Images</span>"
+                f"<span class='hbadge'>&#127909; Video</span>"
+                f"<span class='hbadge'>&#127760; 5 Languages</span>"
+                f"</div>"
+                f"</div>"
             )
    
 

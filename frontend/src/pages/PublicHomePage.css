@@ -76,7 +76,8 @@
 .hp-util-l b {
   font-weight: 600;
   color: #fff8f0;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
 
 .hp-util-r {
@@ -1172,10 +1173,10 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-t {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 11px;
-  letter-spacing: .16em;
-  text-transform: uppercase;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: #5a7aa0;
   display: flex;
   align-items: center;
@@ -1192,8 +1193,9 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-week {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 10.5px;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
   color: #5a7aa0;
 }
 
@@ -1222,10 +1224,10 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-rk {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 11px;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
   color: #5a7aa0;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .hp-trend-q {
@@ -1234,8 +1236,9 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-ct {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 11px;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
   color: #1f7a4d;
   display: flex;
   align-items: center;
@@ -1283,11 +1286,10 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-panel-title {
-  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
-  font-size: clamp(18px, 1.25vw + 14px, 24px);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: clamp(17px, 1.1vw + 13px, 21px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: #071428;
   line-height: 1.2;
 }
@@ -1296,10 +1298,9 @@ a.hp-nav-dd-item:hover {
   font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   color: #3d4d66;
   font-size: 13px;
-  margin-top: 6px;
-  font-weight: 600;
-  text-transform: none;
-  letter-spacing: 0.01em;
+  margin-top: 4px;
+  font-weight: 400;
+  letter-spacing: 0;
   line-height: 1.35;
 }
 
@@ -1379,38 +1380,35 @@ button.hp-panel-all {
   font-weight: 700;
   font-size: 18px;
   line-height: 1;
-  color: #004a99;
+  color: #0b1733;
 }
 
 .hp-news-date .m {
   font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   font-size: 11px;
-  letter-spacing: 0.06em;
-  color: #3d556d;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #0b1733;
   margin-top: 4px;
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .hp-news-body .loc {
   font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #0a2540;
+  letter-spacing: 0;
+  color: #4a6080;
   margin-bottom: 4px;
-  font-weight: 700;
+  font-weight: 400 !important;
   line-height: 1.3;
 }
 
 .hp-news-body .head {
   font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1.45;
   color: #071428;
   margin-bottom: 3px;
-  text-transform: none;
 }
 
 /* Distribution */
@@ -1432,10 +1430,9 @@ button.hp-panel-all {
 .hp-dist-lbl {
   font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   color: #071428;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-weight: 500;
   font-size: 13px;
-  letter-spacing: 0.045em;
+  letter-spacing: 0;
   line-height: 1.25;
 }
 
@@ -1444,7 +1441,7 @@ button.hp-panel-all {
   font-size: 15px;
   text-align: right;
   color: #071428;
-  font-weight: 800;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1497,9 +1494,9 @@ button.hp-panel-all {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 700;
+  font-weight: 500;
   color: #071428;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   font-size: 13px;
 }
 
@@ -1510,7 +1507,7 @@ button.hp-panel-all {
 
 .hp-dist-foot strong {
   color: #004a99;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 /* Map */
@@ -1599,21 +1596,19 @@ button.hp-panel-all {
 }
 
 .hp-res-h h2 {
-  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(20px, 1.4vw + 14px, 26px);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: #0b1733;
 }
 
 .hp-res-h .sub {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 11px;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
   color: #5a7aa0;
   margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-weight: 400;
 }
 
 .hp-res-grid {
@@ -1643,22 +1638,19 @@ button.hp-panel-all {
 }
 
 .hp-res-card .ti {
-  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 500;
   line-height: 1.3;
   color: #0b1733;
-  text-transform: uppercase;
   margin-bottom: 12px;
 }
 
 .hp-res-card .ct {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
-  font-size: 10px;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
   color: #5a7aa0;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  font-weight: 600;
+  font-weight: 400;
   border-top: 1px solid #f0f4f8;
   padding-top: 10px;
   margin-top: auto;

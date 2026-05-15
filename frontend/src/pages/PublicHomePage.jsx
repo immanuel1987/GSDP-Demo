@@ -570,7 +570,7 @@ export function PublicHomePage() {
         <div className="hp-util">
           <div className="hp-util-row">
             <div className="hp-util-l">
-              <span><b>OPEN KNOWLEDGE</b></span>
+              <span><b>Open Knowledge</b></span>
               <span>South Asia Pilot</span>
               <span>Strenna 2026</span>
               <span>136 nations · 1,703 houses</span>
@@ -865,9 +865,9 @@ export function PublicHomePage() {
             </div>
             <div className="hp-dist-foot">
               <div className="hp-dist-foot-l">
-                <strong>SOUTH ASIA PILOT</strong>
+                <strong>South Asia Pilot</strong>
                 <span className="hp-dist-sep">/</span>
-                <span>12 PROVINCES</span>
+                <span>12 provinces</span>
               </div>
               <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
                 Full directory →
