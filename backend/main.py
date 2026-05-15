@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth
 from routes import ontology
-from salesianonline_rag.rag_gradio import mount_rag_gradio
+from salesianonline_rag.app import mount_rag_gradio
 
 
 

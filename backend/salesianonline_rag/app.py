@@ -2,8 +2,8 @@
 GSDP Semantic Search — RAG assistant over multilingual educational content
 (PDFs, audio, images, video).
 
-This module is loaded by ``backend/main.py`` (``mount_rag_gradio``). Start the
-stack with only ``uvicorn main:app`` — do not run this file as ``__main__``.
+This module can be loaded by ``backend/main.py`` (``mount_rag_gradio``) or 
+run standalone with ``python app.py``.
 """
 
 import os
@@ -20,9 +20,14 @@ ENDPOINT_NAME = os.environ.get("VECTOR_SEARCH_ENDPOINT", "multimodal_endpoint")
 INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "salesianonline.gold.vector_content_index")
 LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
 
-# Hardcoded Databricks credentials
-DATABRICKS_HOST = os.environ.get("DATABRICKS_SERVER_HOSTNAME", "https://dbc-f99975de-9224.cloud.databricks.com")
-DATABRICKS_TOKEN = os.environ.get("DATABRICKS_ACCESS_TOKEN", "dapia5554ab24c1fa7f53da24f14fb0d7620")
+# Get Databricks credentials from environment or use defaults
+# In Databricks Apps, these are automatically provided
+DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", 
+                                 os.environ.get("DATABRICKS_SERVER_HOSTNAME", 
+                                               "https://dbc-f99975de-9224.cloud.databricks.com"))
+DATABRICKS_TOKEN = os.environ.get("DATABRICKS_TOKEN",
+                                  os.environ.get("DATABRICKS_ACCESS_TOKEN", 
+                                                "dapia5554ab24c1fa7f53da24f14fb0d7620"))
 
 
 # ============================================================
@@ -273,177 +278,7 @@ def switch_language(lang_choice):
 # ============================================================
 # GRADIO UI
 # ============================================================
-
-# Gradio follows OS dark mode and uses `*_dark` theme tokens — those must match our
-# light palette or the UI stays black/orange regardless of `css=`.
-RAG_HEAD_FORCE_LIGHT = """
-<script>
-(function () {
-  function forceLight() {
-    try {
-      var r = document.documentElement;
-      r.classList.remove("dark");
-      r.classList.add("light");
-      r.style.colorScheme = "light";
-      if (document.body) {
-        document.body.classList.remove("dark");
-        document.body.classList.add("light");
-      }
-      var u = new URL(window.location.href);
-      if (u.searchParams.get("__theme") !== "light") {
-        u.searchParams.set("__theme", "light");
-        window.history.replaceState({}, "", u.toString());
-      }
-    } catch (e) {}
-  }
-  forceLight();
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", forceLight);
-  }
-  setTimeout(forceLight, 0);
-  setTimeout(forceLight, 80);
-  setTimeout(forceLight, 400);
-  setTimeout(forceLight, 1200);
-  try {
-    new MutationObserver(function () {
-      if (document.documentElement.classList.contains("dark")) {
-        forceLight();
-      }
-    }).observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-  } catch (e) {}
-})();
-</script>
-"""
-
-
-def _build_gsdp_theme():
-    """Soft theme with identical light + dark tokens (always blue / white UI)."""
-    base = gr.themes.Soft(
-        primary_hue=gr.themes.colors.blue,
-        secondary_hue=gr.themes.colors.sky,
-        neutral_hue=gr.themes.colors.slate,
-        font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
-        radius_size=gr.themes.sizes.radius_lg,
-    )
-    bg = "#eff6ff"
-    white = "#ffffff"
-    ice = "#f0f9ff"
-    border = "#bfdbfe"
-    text = "#0f172a"
-    navy = "#1e3a8a"
-    subtle = "#64748b"
-    primary = "#0284c7"
-    primary_hover = "#0369a1"
-    tokens = {
-        "body_background_fill": bg,
-        "body_background_fill_dark": bg,
-        "body_text_color": text,
-        "body_text_color_dark": text,
-        "body_text_color_subdued": subtle,
-        "body_text_color_subdued_dark": subtle,
-        "background_fill_primary": white,
-        "background_fill_primary_dark": white,
-        "background_fill_secondary": ice,
-        "background_fill_secondary_dark": ice,
-        "border_color_primary": border,
-        "border_color_primary_dark": border,
-        "border_color_accent": primary,
-        "border_color_accent_dark": primary,
-        "color_accent": primary,
-        "color_accent_dark": primary,
-        "color_accent_soft": "#e0f2fe",
-        "color_accent_soft_dark": "#e0f2fe",
-        "panel_background_fill": white,
-        "panel_background_fill_dark": white,
-        "panel_border_color": border,
-        "panel_border_color_dark": border,
-        "block_background_fill": white,
-        "block_background_fill_dark": white,
-        "block_border_color": border,
-        "block_border_color_dark": border,
-        "block_title_text_color": navy,
-        "block_title_text_color_dark": navy,
-        "block_label_text_color": navy,
-        "block_label_text_color_dark": navy,
-        "block_label_background_fill": white,
-        "block_label_background_fill_dark": white,
-        "input_background_fill": white,
-        "input_background_fill_dark": white,
-        "input_background_fill_hover": "#f8fafc",
-        "input_background_fill_hover_dark": "#f8fafc",
-        "input_border_color": border,
-        "input_border_color_dark": border,
-        "input_border_color_focus": "#3b82f6",
-        "input_border_color_focus_dark": "#3b82f6",
-        "input_placeholder_color": subtle,
-        "input_placeholder_color_dark": subtle,
-        "button_primary_background_fill": primary,
-        "button_primary_background_fill_dark": primary,
-        "button_primary_background_fill_hover": primary_hover,
-        "button_primary_background_fill_hover_dark": primary_hover,
-        "button_primary_text_color": white,
-        "button_primary_text_color_dark": white,
-        "button_primary_border_color": "#0ea5e9",
-        "button_primary_border_color_dark": "#0ea5e9",
-        "button_secondary_background_fill": white,
-        "button_secondary_background_fill_dark": white,
-        "button_secondary_text_color": navy,
-        "button_secondary_text_color_dark": navy,
-        "button_secondary_border_color": border,
-        "button_secondary_border_color_dark": border,
-        "checkbox_background_color": white,
-        "checkbox_background_color_dark": white,
-        "checkbox_border_color": "#93c5fd",
-        "checkbox_border_color_dark": "#93c5fd",
-        "checkbox_border_color_selected": primary,
-        "checkbox_border_color_selected_dark": primary,
-        "checkbox_background_color_selected": "#e0f2fe",
-        "checkbox_background_color_selected_dark": "#e0f2fe",
-        "checkbox_label_text_color": navy,
-        "checkbox_label_text_color_dark": navy,
-        "checkbox_label_text_color_selected": navy,
-        "checkbox_label_text_color_selected_dark": navy,
-        "accordion_text_color": navy,
-        "accordion_text_color_dark": navy,
-        "loader_color": primary,
-        "loader_color_dark": primary,
-        "link_text_color": primary,
-        "link_text_color_dark": primary,
-    }
-    try:
-        return base.set(**tokens)
-    except TypeError:
-        return base.set(
-            body_background_fill=bg,
-            body_background_fill_dark=bg,
-            body_text_color=text,
-            body_text_color_dark=text,
-            button_primary_background_fill=primary,
-            button_primary_background_fill_dark=primary,
-            button_primary_text_color=white,
-            button_primary_text_color_dark=white,
-            block_background_fill=white,
-            block_background_fill_dark=white,
-        )
-
-
 CUSTOM_CSS = """
-/* Root: keep light surfaces even if `html` temporarily has `.dark` from OS sync */
-html,
-body {
-    color-scheme: light !important;
-    background-color: #eff6ff !important;
-}
-
-html.dark,
-html.dark body {
-    color-scheme: light !important;
-    background-color: #eff6ff !important;
-}
-
 /* ============================================================
    GSDP Semantic Search — custom blue & white (overrides Gradio defaults)
    Palette: white #ffffff, ice #f8fafc / #f0f9ff, borders #bfdbfe / #dbeafe,
@@ -685,6 +520,18 @@ html.dark body {
     box-shadow: 0 8px 24px rgba(2, 132, 199, 0.4) !important;
 }
 
+/* --- Footer --- */
+.footer {
+    text-align: center;
+    color: #64748b !important;
+    padding: 1.1rem 0.5rem 0 !important;
+    font-size: 0.78rem !important;
+    border-top: 1px solid #bfdbfe !important;
+    margin-top: 0.75rem !important;
+    background: linear-gradient(180deg, transparent, #f0f9ff) !important;
+    border-radius: 0 0 8px 8px !important;
+}
+
 /* --- Loading card (Markdown HTML) --- */
 @keyframes rag-premium-spin {
     to { transform: rotate(360deg); }
@@ -735,22 +582,6 @@ html.dark body {
 .generating {
     border-radius: 8px !important;
 }
-
-/* If `html.dark` is still present, force the same light tokens inside the app */
-html.dark .gradio-container {
-    --body-background-fill: #eff6ff !important;
-    --background-fill-primary: #ffffff !important;
-    --background-fill-secondary: #f0f9ff !important;
-    --border-color-primary: #bfdbfe !important;
-    --body-text-color: #0f172a !important;
-    --block-label-text-color: #1e3a8a !important;
-    --block-title-text-color: #1e3a8a !important;
-    --input-background-fill: #ffffff !important;
-    --input-border-color: #bfdbfe !important;
-    --button-primary-background-fill: #0284c7 !important;
-    --button-primary-text-color: #ffffff !important;
-    --color-accent: #0284c7 !important;
-}
 """
 
 EXAMPLE_QUERIES = [
@@ -764,11 +595,31 @@ EXAMPLE_QUERIES = [
 
 def create_app():
     """Build the Gradio application."""
+    _theme = gr.themes.Soft(
+        primary_hue=gr.themes.colors.blue,
+        secondary_hue=gr.themes.colors.sky,
+        neutral_hue=gr.themes.colors.slate,
+        font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+        radius_size=gr.themes.sizes.radius_lg,
+    )
+    try:
+        _theme = _theme.set(
+            body_background_fill="#eff6ff",
+            block_background_fill="#ffffff",
+            block_border_color="#bfdbfe",
+            block_title_text_color="#1e3a8a",
+            block_label_text_color="#1e3a8a",
+            input_background_fill="#ffffff",
+            button_primary_background_fill="#0284c7",
+            button_primary_text_color="#ffffff",
+        )
+    except (TypeError, AttributeError):
+        pass
+
     with gr.Blocks(
         css=CUSTOM_CSS,
         title="GSDP Semantic Search",
-        theme=_build_gsdp_theme(),
-        head=RAG_HEAD_FORCE_LIGHT,
+        theme=_theme,
     ) as app:
 
         with gr.Column(elem_classes="header-section"):
@@ -838,6 +689,8 @@ def create_app():
                 label="Click any example to try:"
             )
 
+       
+
         # Event handlers
         submit_btn.click(
             fn=chat,
@@ -868,8 +721,22 @@ def create_app():
 def mount_rag_gradio(fastapi_app: FastAPI, path: str = "/rag") -> None:
     """Wire the RAG Gradio UI onto the main FastAPI app.
 
-    Call this once from ``main.py`` when the API starts. Do not run
-    ``rag_gradio.py`` as a script — ``uvicorn main:app`` loads this module
-    and mounts the UI automatically.
+    Call this once from ``main.py`` when the API starts.
     """
     gr.mount_gradio_app(fastapi_app, create_app(), path=path)
+
+
+# ============================================================
+# STANDALONE LAUNCH
+# ============================================================
+# if __name__ == "__main__":
+#     # Launch Gradio app directly when run as standalone script
+#     # For Databricks Apps, use port 8080
+#     port = int(os.environ.get("PORT", 8080))
+#     print(f"Starting GSDP Semantic Search on port {port}...")
+#     app = create_app()
+#     app.launch(
+#         server_name="0.0.0.0",
+#         server_port=port,
+#         share=False
+#     )
