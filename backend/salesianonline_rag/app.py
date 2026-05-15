@@ -20,7 +20,7 @@ ENDPOINT_NAME = os.environ.get("VECTOR_SEARCH_ENDPOINT", "multimodal_endpoint")
 INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "salesianonline.gold.vector_content_index")
 LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
 # Browser "Home" from the RAG UI (e.g. frontend URL or "/"). Defaults to site root on the same origin.
-GSDP_HOME_URL = os.environ.get("GSDP_HOME_URL", "https://demo-global-galesian-digital-platform.imman.workers.dev/")
+GSDP_HOME_URL = os.environ.get("GSDP_HOME_URL", "https://gsdp-dev.cristoerp.com/")
 
 # Get Databricks credentials from environment or use defaults
 # In Databricks Apps, these are automatically provided
