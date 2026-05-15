@@ -6,6 +6,7 @@ import { effectiveAllowedPageSet } from '../../auth/permissions'
 import { DASHBOARD_PAGE_TITLES } from '../../data/dashboardNav'
 import { SdbGlobeLogo } from '../../components/branding/SdbGlobeLogo'
 import { AiAssistantDock } from '../../components/AiAssistantDock'
+import { ragAssistantUrl } from '../../lib/ontologyApi'
 
 const DISCOVER_NAV = [
   { page: 'dashboard', to: '/dashboard', end: true, icon: '📊', label: 'Dashboard' },
@@ -270,13 +271,28 @@ export function DashboardLayout() {
           <h1 className="min-w-0 flex-1 font-serif text-lg font-bold leading-tight text-sdb-blue-deep sm:text-base">
             {pageTitle}
           </h1>
-          <div className="relative hidden max-w-[360px] flex-1 items-center gap-2 rounded border border-border-sdb bg-off-white py-1.5 pl-3 pr-3 transition-colors focus-within:border-sdb-blue md:flex">
+          <div
+            role="button"
+            tabIndex={0}
+            title="Open Knowledge Assistant (semantic search)"
+            className="relative hidden max-w-[360px] flex-1 cursor-pointer items-center gap-2 rounded border border-border-sdb bg-off-white py-1.5 pl-3 pr-3 transition-colors focus-within:border-sdb-blue md:flex"
+            onClick={() => {
+              window.location.assign(ragAssistantUrl())
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                window.location.assign(ragAssistantUrl())
+              }
+            }}
+          >
             <span className="text-sm text-mid">🔍</span>
             <input
               type="search"
               readOnly
               placeholder="Search across all modules…"
-              className="min-w-0 flex-1 border-none bg-transparent text-[13px] text-ink outline-none"
+              className="pointer-events-none min-w-0 flex-1 border-none bg-transparent text-[13px] text-ink outline-none"
+              tabIndex={-1}
             />
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">

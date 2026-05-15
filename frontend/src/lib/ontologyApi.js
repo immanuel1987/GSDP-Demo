@@ -8,6 +8,18 @@ import { ANALYTICS_PROVINCE_DATA } from '../data/analyticsProvinceData'
 //   return 'http://127.0.0.1:2005'
 // }
 
+/** GSDP Semantic Search (Gradio) on the FastAPI backend. `__theme=light` avoids OS-dark Gradio skin. */
+export function ragAssistantUrl() {
+  const base = apiBase()
+  try {
+    const u = new URL(`${base}/rag`)
+    u.searchParams.set('__theme', 'light')
+    return u.toString()
+  } catch {
+    return `${base}/rag?__theme=light`
+  }
+}
+
 export function apiBase() {
   const raw = import.meta.env.VITE_API_BASE_URL
   const s = raw === undefined || raw === null ? '' : String(raw).trim()
@@ -73,6 +85,84 @@ export async function fetchOntologyRows({ limit = 80, offset = 0, q = '' } = {})
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
   }
   return res.json()
+}
+
+/**
+ * Paginated rows from `salesianonline.silver.final` (backend: GET /data/salesianonline/final).
+ * @param {{ limit?: number, offset?: number, q?: string }} opts
+ */
+export async function fetchSalesianonlineFinalRows({ limit = 100, offset = 0, q = '' } = {}) {
+  const params = new URLSearchParams()
+  params.set('limit', String(limit))
+  params.set('offset', String(offset))
+  if (q.trim()) params.set('q', q.trim())
+  const url = `${apiBase()}/data/salesianonline/final?${params.toString()}`
+  const res = await apiFetch(url)
+  if (!res.ok) {
+    const text = await res.text()
+    let detail = text
+    try {
+      const j = JSON.parse(text)
+      detail = j.detail ?? text
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
+  }
+  return res.json()
+}
+
+/** @param {unknown} v */
+export function formatOntologyCellForDisplay(v) {
+  if (v == null || v === '') return null
+  if (Array.isArray(v)) {
+    const s = v.map((x) => String(x)).filter(Boolean).join(', ')
+    return s || null
+  }
+  if (typeof v === 'object') {
+    try {
+      return JSON.stringify(v).slice(0, 200)
+    } catch {
+      return String(v)
+    }
+  }
+  return String(v)
+}
+
+/** Best thumbnail URL for a `salesianonline.silver.final` row. */
+export function pickSalesianonlineThumbnailUrl(row) {
+  if (!row || typeof row !== 'object') return null
+  const keys = [
+    'image_thumbnail_url',
+    'image_medium_url',
+    'image_large_url',
+    'image_full_url',
+  ]
+  for (const k of keys) {
+    const u = row[k]
+    if (u && String(u).trim().startsWith('http')) return String(u).trim()
+  }
+  return null
+}
+
+/** Primary link to open (media or post). */
+export function pickSalesianonlineOpenUrl(row) {
+  if (!row || typeof row !== 'object') return null
+  const keys = [
+    'link',
+    'source_url',
+    'image_large_url',
+    'image_full_url',
+    'image_medium_url',
+    'extracted_url',
+    'parent_post_link',
+    'image_thumbnail_url',
+  ]
+  for (const k of keys) {
+    const u = row[k]
+    if (u && String(u).trim().startsWith('http')) return String(u).trim()
+  }
+  return null
 }
 
 // export async function fetchOntologyRows({ limit = 700, offset = 0, q = '' } = {}) {

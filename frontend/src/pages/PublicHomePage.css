@@ -1,5 +1,4 @@
-/* GSDP Public Home Page – converted from salesian_homepage_final_1.html */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* GSDP Public Home Page — fonts loaded in index.html (Source Sans 3, Source Serif 4, IBM Plex Mono) */
 
 .hp-root {
   /* Blue-forward shell — premium depth + air */
@@ -8,7 +7,7 @@
     radial-gradient(90% 50% at 100% 20%, rgba(230, 126, 34, 0.06) 0%, transparent 45%),
     linear-gradient(180deg, #eef4fc 0%, #e8f0fa 38%, #f2f6fb 100%);
   color: #0f2744;
-  font-family: 'Inter Tight', sans-serif;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(16px, 0.55vw + 14px, 18px);
   line-height: 1.56;
   -webkit-font-smoothing: antialiased;
@@ -31,15 +30,16 @@
 }
 
 .hp-serif {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
 
 .hp-mono {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px;
   letter-spacing: 0.02em;
+  font-weight: 500;
 }
 
 /* ── UTILITY BAR ── */
@@ -82,7 +82,7 @@
 .hp-util-r {
   display: flex;
   gap: 14px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
 }
 
@@ -150,7 +150,7 @@
   display: grid;
   place-items: center;
   color: #fff;
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-weight: 700;
   font-size: 17px;
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.18);
@@ -166,7 +166,7 @@
 }
 
 .hp-brand-tile-title {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: clamp(15px, 1.1vw + 12px, 17px);
   font-weight: 600;
   color: #082f4d;
@@ -270,7 +270,7 @@
 
 .hp-nav-dd-h {
   padding: 10px 20px 6px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -336,6 +336,7 @@ a.hp-nav-dd-item:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  cursor: pointer;
   background: #ffffff;
   border: 1px solid #b8cce8;
   padding: 8px 14px;
@@ -361,7 +362,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-kbd {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10px;
   color: #5a7aa0;
   border: 1px solid #c8d8ee;
@@ -540,7 +541,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-hero-tag {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10.5px;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -580,7 +581,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-slide h1 {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: clamp(34px, 4.2vw, 52px);
   line-height: 1.05;
   font-weight: 500;
@@ -838,7 +839,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-overview-modal-title {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: 18px;
   font-weight: 600;
   color: #fff;
@@ -944,7 +945,7 @@ a.hp-nav-dd-item:hover {
   position: absolute;
   top: 24px;
   right: 28px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 12px;
   color: rgba(255, 255, 255, .6);
   letter-spacing: .1em;
@@ -996,7 +997,7 @@ a.hp-nav-dd-item:hover {
   color: #fff;
   display: grid;
   place-items: center;
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-weight: 700;
   font-size: 18px;
   letter-spacing: .02em;
@@ -1004,7 +1005,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-rector-info .role {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10px;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -1013,7 +1014,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-rector-info h3 {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: clamp(17px, 1vw + 14px, 20px);
   font-weight: 600;
   line-height: 1.1;
@@ -1067,7 +1068,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-live-lbl {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -1075,7 +1076,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-live-upd {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   color: #1f7a4d;
   display: flex;
@@ -1110,7 +1111,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-live-cell .v {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-weight: 600;
   font-size: 21px;
   line-height: 1;
@@ -1126,7 +1127,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-live-cell .delta {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 9px;
   color: #1f7a4d;
   margin-top: 3px;
@@ -1171,7 +1172,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-t {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: .16em;
   text-transform: uppercase;
@@ -1191,7 +1192,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-week {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10.5px;
   color: #5a7aa0;
 }
@@ -1221,7 +1222,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-rk {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   color: #5a7aa0;
   font-weight: 500;
@@ -1233,7 +1234,7 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-trend-ct {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   color: #1f7a4d;
   display: flex;
@@ -1282,29 +1283,33 @@ a.hp-nav-dd-item:hover {
 }
 
 .hp-panel-title {
-  font-family: 'Fraunces', serif;
-  font-size: clamp(16px, 1.1vw + 12px, 20px);
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
+  font-size: clamp(18px, 1.25vw + 14px, 24px);
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #0b1733;
+  color: #071428;
+  line-height: 1.2;
 }
 
 .hp-panel-sub {
-  font-family: 'JetBrains Mono', monospace;
-  color: #5a7aa0;
-  font-size: 10px;
-  margin-top: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  color: #3d4d66;
+  font-size: 13px;
+  margin-top: 6px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
 }
 
 .hp-panel-all {
-  font-size: 12px;
-  color: #005fae;
-  font-weight: 500;
+  font-size: 14px;
+  color: #004a99;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
 }
 
 .hp-panel-all:hover {
@@ -1320,14 +1325,14 @@ button.hp-panel-all {
 }
 
 .hp-col-all {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: #004a99;
   cursor: pointer;
   background: none;
   border: none;
   padding: 0;
-  font-family: inherit;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
   white-space: nowrap;
 }
 
@@ -1344,9 +1349,9 @@ button.hp-panel-all {
 
 .hp-news-item {
   display: grid;
-  grid-template-columns: 36px 1fr;
-  gap: 10px;
-  padding: 7px 6px;
+  grid-template-columns: 52px 1fr;
+  gap: 14px;
+  padding: 12px 8px;
   border-bottom: 1px solid #e8f0fa;
   cursor: pointer;
   transition: all .15s;
@@ -1365,79 +1370,86 @@ button.hp-panel-all {
 .hp-news-date {
   text-align: center;
   border-right: 1px solid #c8d8ee;
-  padding-right: 6px;
+  padding-right: 10px;
+  min-width: 0;
 }
 
 .hp-news-date .d {
-  font-family: 'Fraunces', serif;
-  font-weight: 800;
-  font-size: 15px;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
+  font-weight: 700;
+  font-size: 18px;
   line-height: 1;
   color: #004a99;
 }
 
 .hp-news-date .m {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 8.5px;
-  letter-spacing: .1em;
-  color: #5a7aa0;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #3d556d;
   text-transform: uppercase;
-  margin-top: 2px;
+  margin-top: 4px;
   font-weight: 700;
 }
 
 .hp-news-body .loc {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  letter-spacing: .13em;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #005fae;
-  margin-bottom: 2px;
-  font-weight: 800;
+  color: #0a2540;
+  margin-bottom: 4px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .hp-news-body .head {
-  font-size: 13px;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
   font-weight: 700;
-  line-height: 1.35;
-  color: #0b1733;
+  line-height: 1.45;
+  color: #071428;
   margin-bottom: 3px;
+  text-transform: none;
 }
 
 /* Distribution */
 .hp-dist {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   flex: 1;
 }
 
 .hp-dist-row {
   display: grid;
-  grid-template-columns: 90px 1fr 50px;
-  gap: 10px;
+  grid-template-columns: minmax(118px, 38%) 1fr 54px;
+  gap: 12px;
   align-items: center;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .hp-dist-lbl {
-  color: #0b1733;
-  font-weight: 800;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  color: #071428;
+  font-weight: 700;
   text-transform: uppercase;
-  font-size: 10.5px;
-  letter-spacing: 0.03em;
+  font-size: 13px;
+  letter-spacing: 0.045em;
+  line-height: 1.25;
 }
 
 .hp-dist-num {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11.5px;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
   text-align: right;
-  color: #0b1733;
-  font-weight: 700;
+  color: #071428;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .hp-dist-bar {
-  height: 8px;
+  height: 10px;
   background: #e8f0fa;
   border-radius: 30px;
   overflow: hidden;
@@ -1473,11 +1485,12 @@ button.hp-panel-all {
   margin-top: auto;
   padding-top: 14px;
   border-top: 1px dashed #b8cce8;
-  font-size: 11px;
-  color: #5a7aa0;
+  font-size: 13px;
+  color: #3d4d66;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
 }
 
 .hp-dist-foot-l {
@@ -1485,8 +1498,9 @@ button.hp-panel-all {
   align-items: center;
   gap: 8px;
   font-weight: 700;
-  color: #0b1733;
-  letter-spacing: 0.05em;
+  color: #071428;
+  letter-spacing: 0.04em;
+  font-size: 13px;
 }
 
 .hp-dist-sep {
@@ -1585,7 +1599,7 @@ button.hp-panel-all {
 }
 
 .hp-res-h h2 {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: clamp(20px, 1.4vw + 14px, 26px);
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -1594,7 +1608,7 @@ button.hp-panel-all {
 }
 
 .hp-res-h .sub {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   color: #5a7aa0;
   margin-top: 4px;
@@ -1629,7 +1643,7 @@ button.hp-panel-all {
 }
 
 .hp-res-card .ti {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: 15px;
   font-weight: 800;
   line-height: 1.3;
@@ -1639,7 +1653,7 @@ button.hp-panel-all {
 }
 
 .hp-res-card .ct {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10px;
   color: #5a7aa0;
   text-transform: uppercase;
@@ -1709,7 +1723,7 @@ button.hp-panel-all {
 }
 
 .hp-foot-card h4 {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 11px;
   letter-spacing: .18em;
   color: #a8d4ff;
@@ -1792,7 +1806,7 @@ button.hp-panel-all {
 }
 
 .hp-foot-col li .badge {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 9.5px;
   color: #a8d4ff;
   margin-left: 6px;
@@ -2222,7 +2236,7 @@ button.hp-panel-all {
 }
 
 .hp-res-h h2 {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: clamp(22px, 1.4vw + 14px, 28px);
   font-weight: 600;
   letter-spacing: -.02em;
@@ -2260,7 +2274,7 @@ button.hp-panel-all {
 }
 
 .hp-res-card .tag {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
   font-size: 10px;
   letter-spacing: .12em;
   text-transform: uppercase;
@@ -2272,7 +2286,7 @@ button.hp-panel-all {
 }
 
 .hp-res-card .ti {
-  font-family: 'Fraunces', serif;
+  font-family: 'Source Serif 4', ui-serif, Georgia, serif;
   font-size: 16px;
   font-weight: 600;
   line-height: 1.3;

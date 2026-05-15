@@ -8,6 +8,7 @@ from database.databricks import (
     query_ontology_summary,
     query_ontology_table,
     query_resource_excel_table,
+    query_salesianonline_final_table,
 )
 
 
@@ -59,6 +60,33 @@ def get_resource_excel_data(
     """
     try:
         result = query_resource_excel_table(limit=limit, offset=offset, search=q)
+        return {
+            "status": "success",
+            "count": len(result["data"]),
+            "total": result["total"],
+            "limit": limit,
+            "offset": offset,
+            "data": result["data"],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/salesianonline/final")
+def get_salesianonline_final_data(
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[
+        Optional[str],
+        Query(max_length=200, description="Search title, caption, description, extracted fields, etc."),
+    ] = None,
+):
+    """
+    Paginated rows from `salesianonline.silver.final` (media / post metadata and extracted ontology fields).
+    Override table with env `DATABRICKS_SALESIANONLINE_FINAL_TABLE` if needed.
+    """
+    try:
+        result = query_salesianonline_final_table(limit=limit, offset=offset, search=q)
         return {
             "status": "success",
             "count": len(result["data"]),

@@ -12,6 +12,7 @@ import {
   fetchOntologyRows,
   fetchOntologySummary,
   formatOntologyFreshness,
+  ragAssistantUrl,
 } from '../lib/ontologyApi'
 import gsdpIntroVideoUrl from '../assets/viedo/AI_Platform_Video_Generation_Request.mp4'
 import { ResourceDetailModal } from './dashboard/dashboardViews'
@@ -595,11 +596,29 @@ export function PublicHomePage() {
               </div>
             </div>
             <HpNavMenu />
-            <div className="hp-nav-search">
+            <div
+              className="hp-nav-search"
+              role="button"
+              tabIndex={0}
+              title="Open Knowledge Assistant (semantic search)"
+              onClick={() => {
+                window.location.assign(ragAssistantUrl())
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  window.location.assign(ragAssistantUrl())
+                }
+              }}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="11" cy="11" r="7" /><path d="m20 20-3-3" />
               </svg>
-              <input placeholder={`Search ${catalogTotalLabel} resources…`} />
+              <input
+                readOnly
+                placeholder={`Search ${catalogTotalLabel} resources…`}
+                tabIndex={-1}
+              />
               <span className="hp-kbd">⌘K</span>
             </div>
             <div className="hp-nav-cta">

@@ -1,5 +1,7 @@
 import os
 import re
+import uuid
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, Tuple
@@ -16,6 +18,10 @@ DATABRICKS_ACCESS_TOKEN = os.getenv("DATABRICKS_ACCESS_TOKEN")
 ONTOLOGY_TABLE = "ontology.bronze.final_table_ontology"
 RESOURCE_EXCEL_TABLE = "ontology.silver.resource_final_excel_driven"
 ONTOLOGY_MAPPED_VALUE_DEDUP_TABLE = "ontology.silver.ontology_mapped_value_deduplicated"
+SALESIANONLINE_FINAL_TABLE = os.getenv(
+    "DATABRICKS_SALESIANONLINE_FINAL_TABLE",
+    "salesianonline.silver.final",
+)
 
 # Cached (name, dtype lower) rows from DESCRIBE — refreshed on process restart only.
 _mapped_value_dedup_schema_cache: Optional[Tuple[list[str], list[str]]] = None
@@ -71,6 +77,147 @@ ONTOLOGY_SELECT_COLUMNS = [
     "feature_image",
 ]
 
+# salesianonline.silver.final — explicit column list (avoids SELECT * payload size).
+SALESIANONLINE_FINAL_COLUMNS = [
+    "id",
+    "alt_text",
+    "author_id",
+    "author_name",
+    "author_url",
+    "caption",
+    "comment_status",
+    "date_local",
+    "date_utc",
+    "description",
+    "filesize_bytes",
+    "guid",
+    "image_full_height",
+    "image_full_mime_type",
+    "image_full_url",
+    "image_full_width",
+    "image_large_height",
+    "image_large_mime_type",
+    "image_large_url",
+    "image_large_width",
+    "image_medium_height",
+    "image_medium_large_height",
+    "image_medium_large_mime_type",
+    "image_medium_large_url",
+    "image_medium_large_width",
+    "image_medium_mime_type",
+    "image_medium_url",
+    "image_medium_width",
+    "image_thumbnail_height",
+    "image_thumbnail_mime_type",
+    "image_thumbnail_url",
+    "image_thumbnail_width",
+    "ingest_timestamp",
+    "link",
+    "media_type",
+    "mime_type",
+    "modified_local",
+    "modified_utc",
+    "parent_post_id",
+    "parent_post_link",
+    "parent_post_slug",
+    "parent_post_status",
+    "parent_post_title",
+    "ping_status",
+    "post_id",
+    "slug",
+    "source_api_url",
+    "source_url",
+    "status",
+    "tags_count",
+    "tags_description",
+    "tags_id",
+    "tags_link",
+    "tags_name",
+    "tags_slug",
+    "tags_taxonomy",
+    "template",
+    "title",
+    "type",
+    "extracted_source_table_name",
+    "extracted_source_column",
+    "extracted_source_row_id",
+    "extracted_ingestion_time",
+    "extracted_document_id",
+    "extracted_url",
+    "extracted_title",
+    "extracted_subtitle",
+    "extracted_authors",
+    "extracted_contributors",
+    "extracted_publisher",
+    "extracted_province_region",
+    "extracted_version",
+    "extracted_date_created",
+    "extracted_date_published",
+    "extracted_date_updated",
+    "extracted_file_format",
+    "extracted_file_size",
+    "extracted_page_count",
+    "extracted_duration_seconds",
+    "extracted_duration_formatted",
+    "extracted_image_width",
+    "extracted_image_height",
+    "extracted_encoding_quality",
+    "extracted_languages",
+    "extracted_accessibility",
+    "extracted_media_type",
+    "extracted_publication_type",
+    "extracted_source_category",
+    "extracted_keywords",
+    "extracted_summary",
+    "extracted_access_level",
+    "extracted_lifecycle_stage",
+    "extracted_approval_status",
+    "extracted_compliance_refs",
+    "extracted_retention_policy",
+    "extracted_expiry_date",
+    "extracted_audience",
+    "extracted_related_documents",
+    "extracted_provenance",
+    "extracted_linked_media",
+    "extracted_charism_dimension",
+    "extracted_doc_status",
+    "extracted_distribution_channel",
+    "extracted_ownership",
+    "extracted_doi_isbn_issn",
+    "extracted_religious_context",
+    "extracted_annotations",
+    "extracted_translation_available",
+    "extracted_tags",
+    "extracted_linked_educational_works",
+    "extracted_linked_work_types",
+    "extracted_linked_events",
+    "extracted_linked_people",
+    "extracted_geo_coordinates",
+    "extracted_knowledge_area",
+    "extracted_salesian_family_group",
+    "extracted_watermark_present",
+    "extracted_digital_signature_present",
+    "extracted_transcript_text",
+    "extracted_av_transcription_status",
+]
+
+SALESIANONLINE_FINAL_SEARCH_COLUMNS = [
+    "title",
+    "caption",
+    "description",
+    "slug",
+    "alt_text",
+    "author_name",
+    "parent_post_title",
+    "mime_type",
+    "status",
+    "extracted_title",
+    "extracted_summary",
+    "extracted_url",
+    "extracted_keywords",
+    "extracted_publisher",
+]
+
 RESOURCE_EXCEL_COLUMNS = [
     "LocatedIn",
     "address",
@@ -115,8 +262,20 @@ def get_databricks_connection():
 
 
 def _serialize_value(value):
+    """
+    Recursively coerce Databricks / Spark connector values to JSON-safe Python types.
+    Array and struct columns often arrive as Row-like objects that break FastAPI's jsonable_encoder.
+    """
     if value is None:
         return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        return value
+    if isinstance(value, uuid.UUID):
+        return str(value)
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, date):
@@ -125,7 +284,44 @@ def _serialize_value(value):
         return float(value)
     if isinstance(value, (bytes, bytearray)):
         return value.decode("utf-8", errors="replace")
-    return value
+    if isinstance(value, Mapping):
+        return {str(k): _serialize_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_serialize_value(v) for v in value]
+    if isinstance(value, memoryview):
+        return value.tobytes().decode("utf-8", errors="replace")
+    # PySpark / connector Row
+    as_dict = getattr(value, "asDict", None)
+    if callable(as_dict):
+        try:
+            return _serialize_value(as_dict(recursive=True))
+        except TypeError:
+            try:
+                return _serialize_value(as_dict())
+            except Exception:
+                pass
+    _asdict = getattr(value, "_asdict", None)
+    if callable(_asdict):
+        try:
+            return _serialize_value(_asdict())
+        except Exception:
+            pass
+    # numpy scalar and similar
+    item_fn = getattr(value, "item", None)
+    if callable(item_fn):
+        try:
+            py = item_fn()
+            if py is not value:
+                return _serialize_value(py)
+        except Exception:
+            pass
+    # Generic sequence (e.g. some driver types) but not strings / bytes
+    if isinstance(value, Sequence):
+        try:
+            return [_serialize_value(v) for v in value]
+        except Exception:
+            pass
+    return str(value)
 
 
 def _row_to_dict(columns, row):
@@ -139,6 +335,14 @@ def _quote_sql_ident(name: str) -> str:
     """Spark / Unity Catalog: backtick-escape identifier."""
     n = (name or "").replace("`", "")
     return f"`{n}`"
+
+
+def _fq_table_sql(fq_name: str) -> str:
+    """Quote catalog.schema.table (needed when the table name is a reserved word, e.g. `final`)."""
+    parts = [p for p in (fq_name or "").replace("`", "").split(".") if p]
+    if len(parts) == 3:
+        return f"{_quote_sql_ident(parts[0])}.{_quote_sql_ident(parts[1])}.{_quote_sql_ident(parts[2])}"
+    return fq_name
 
 
 def _load_mapped_value_dedup_schema(cursor) -> Tuple[list[str], list[str]]:
@@ -295,6 +499,60 @@ def query_resource_excel_table(limit: int = 100, offset: int = 0, search: Option
                 data_sql = (
                     f"SELECT {cols_sql} {base_from} "
                     f"ORDER BY coalesce(dateLastUpdated, dateCreated, datePublished) DESC NULLS LAST "
+                    f"LIMIT {limit} OFFSET {offset}"
+                )
+                cursor.execute(data_sql)
+
+            rows = cursor.fetchall()
+            columns = [column[0] for column in cursor.description]
+            data = [_row_to_dict(columns, row) for row in rows]
+            return {"data": data, "total": total}
+    finally:
+        connection.close()
+
+
+def query_salesianonline_final_table(limit: int = 100, offset: int = 0, search: Optional[str] = None):
+    """
+    Paginated rows from salesianonline.silver.final (configurable via DATABRICKS_SALESIANONLINE_FINAL_TABLE).
+    """
+    limit = max(1, min(int(limit), 500))
+    offset = max(0, int(offset))
+    cols_sql = ", ".join(SALESIANONLINE_FINAL_COLUMNS)
+    base_from = f"FROM {_fq_table_sql(SALESIANONLINE_FINAL_TABLE)}"
+
+    connection = get_databricks_connection()
+    try:
+        with connection.cursor() as cursor:
+            q_clean = _sanitize_search(search) if search else ""
+            order_by = "ingest_timestamp DESC NULLS LAST, id DESC NULLS LAST"
+
+            if q_clean:
+                pat = f"%{q_clean}%"
+                or_parts = [
+                    f"lower(coalesce(cast({_quote_sql_ident(c)} as string), '')) like lower(?)"
+                    for c in SALESIANONLINE_FINAL_SEARCH_COLUMNS
+                ]
+                where = "WHERE (" + " OR ".join(or_parts) + ")"
+                params = (pat,) * len(SALESIANONLINE_FINAL_SEARCH_COLUMNS)
+
+                count_sql = f"SELECT COUNT(*) AS c {base_from} {where}"
+                cursor.execute(count_sql, params)
+                total = int(cursor.fetchone()[0])
+
+                data_sql = (
+                    f"SELECT {cols_sql} {base_from} {where} "
+                    f"ORDER BY {order_by} "
+                    f"LIMIT {limit} OFFSET {offset}"
+                )
+                cursor.execute(data_sql, params)
+            else:
+                count_sql = f"SELECT COUNT(*) AS c {base_from}"
+                cursor.execute(count_sql)
+                total = int(cursor.fetchone()[0])
+
+                data_sql = (
+                    f"SELECT {cols_sql} {base_from} "
+                    f"ORDER BY {order_by} "
                     f"LIMIT {limit} OFFSET {offset}"
                 )
                 cursor.execute(data_sql)

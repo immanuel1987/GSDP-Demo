@@ -19,8 +19,12 @@ import {
   buildNetworkWayPillsFromOntologyRows,
   fetchOntologyRows,
   fetchOntologySummary,
+  fetchSalesianonlineFinalRows,
+  formatOntologyCellForDisplay,
   formatOntologyFreshness,
   mapOntologyRowToResource,
+  pickSalesianonlineOpenUrl,
+  pickSalesianonlineThumbnailUrl,
   resourceDocumentKind,
   resourceDocumentUrl,
 } from '../../lib/ontologyApi'
@@ -203,11 +207,31 @@ function filterResources(list, f) {
   })
 }
 
+const SO_LIBRARY_PAGE = 36
+
+function filterSalesianonlineRows(rows, f) {
+  if (!Array.isArray(rows)) return []
+  return rows.filter((row) => {
+    if (f.docMedia === 'pdf') {
+      const mime = String(row.mime_type || '').toLowerCase()
+      const open = String(pickSalesianonlineOpenUrl(row) || '').toLowerCase()
+      if (!mime.includes('pdf') && !open.includes('.pdf')) return false
+    }
+    if (f.docMedia === 'image') {
+      const mime = String(row.mime_type || row.image_full_mime_type || '').toLowerCase()
+      const mt = String(row.media_type || '').toLowerCase()
+      const hasThumb = Boolean(pickSalesianonlineThumbnailUrl(row))
+      if (!mime.startsWith('image/') && !mt.includes('image') && !hasThumb) return false
+    }
+    return true
+  })
+}
+
 export function ResourcesView() {
   const [f, setF] = useState({
     theme: '',
     type: '',
-    docMedia: 'pdf',
+    docMedia: '',
     province: '',
     region: '',
     lang: '',
@@ -227,6 +251,10 @@ export function ResourcesView() {
   const [apiLoading, setApiLoading] = useState(true)
   const [apiError, setApiError] = useState(null)
   const [useStaticFallback, setUseStaticFallback] = useState(false)
+  const [librarySource, setLibrarySource] = useState('ontology')
+  const [soRows, setSoRows] = useState([])
+  const [soTotal, setSoTotal] = useState(null)
+  const [soOffset, setSoOffset] = useState(0)
   const [debouncedQ, setDebouncedQ] = useState('')
 
   useEffect(() => {
@@ -248,7 +276,17 @@ export function ResourcesView() {
   }, [])
 
   useEffect(() => {
-    if (useStaticFallback) return
+    setSoOffset(0)
+  }, [debouncedQ, librarySource])
+
+  useEffect(() => {
+    if (useStaticFallback && librarySource === 'salesianonline') {
+      setLibrarySource('ontology')
+    }
+  }, [useStaticFallback, librarySource])
+
+  useEffect(() => {
+    if (useStaticFallback || librarySource !== 'ontology') return
     let cancelled = false
     setApiLoading(true)
     setApiError(null)
@@ -258,6 +296,8 @@ export function ResourcesView() {
         const mapped = (res.data || []).map((row, i) => mapOntologyRowToResource(row, i))
         setApiRows(mapped)
         setApiTotal(typeof res.total === 'number' ? res.total : null)
+        setSoRows([])
+        setSoTotal(null)
       })
       .catch((e) => {
         if (!cancelled) setApiError(e instanceof Error ? e.message : String(e))
@@ -268,7 +308,31 @@ export function ResourcesView() {
     return () => {
       cancelled = true
     }
-  }, [debouncedQ, useStaticFallback])
+  }, [debouncedQ, useStaticFallback, librarySource])
+
+  useEffect(() => {
+    if (useStaticFallback || librarySource !== 'salesianonline') return
+    let cancelled = false
+    setApiLoading(true)
+    setApiError(null)
+    fetchSalesianonlineFinalRows({ limit: SO_LIBRARY_PAGE, offset: soOffset, q: debouncedQ })
+      .then((res) => {
+        if (cancelled) return
+        setSoRows(Array.isArray(res.data) ? res.data : [])
+        setSoTotal(typeof res.total === 'number' ? res.total : null)
+        setApiRows([])
+        setApiTotal(null)
+      })
+      .catch((e) => {
+        if (!cancelled) setApiError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setApiLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedQ, useStaticFallback, librarySource, soOffset])
 
   const sourceList = useStaticFallback ? DASHBOARD_RESOURCES : apiRows
 
@@ -277,11 +341,16 @@ export function ResourcesView() {
     [sourceList, f, useStaticFallback],
   )
 
+  const filteredSoRows = useMemo(
+    () => filterSalesianonlineRows(soRows, f),
+    [soRows, f],
+  )
+
   function clearFilters() {
     setF({
       theme: '',
       type: '',
-      docMedia: 'pdf',
+      docMedia: '',
       province: '',
       region: '',
       lang: '',
@@ -301,9 +370,40 @@ export function ResourcesView() {
         subtitle={
           useStaticFallback
             ? 'Browse, search, and access the Salesian knowledge corpus (offline sample data)'
-            : 'Browse and search live resources from the platform library'
+            : librarySource === 'salesianonline'
+              ? 'Media and posts from salesianonline.silver.final — search uses the API; document-type filters apply to items on this page.'
+              : 'Browse and search live resources from the platform library'
         }
       >
+        <div className="flex flex-wrap gap-1 rounded-lg border border-border-sdb bg-white p-1">
+          <button
+            type="button"
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              librarySource === 'ontology' ? 'bg-sdb-blue text-white shadow-sm' : 'text-slate-sdb hover:bg-off-white'
+            }`}
+            onClick={() => {
+              setLibrarySource('ontology')
+              setSelectedResource(null)
+            }}
+          >
+            Platform library
+          </button>
+          <button
+            type="button"
+            disabled={useStaticFallback}
+            title={useStaticFallback ? 'Sample data is only available for the platform library' : undefined}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+              librarySource === 'salesianonline' ? 'bg-sdb-blue text-white shadow-sm' : 'text-slate-sdb hover:bg-off-white'
+            } ${useStaticFallback ? 'cursor-not-allowed opacity-40' : ''}`}
+            onClick={() => {
+              if (useStaticFallback) return
+              setLibrarySource('salesianonline')
+              setSelectedResource(null)
+            }}
+          >
+            Salesian Online media
+          </button>
+        </div>
         {apiError ? (
           <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] text-amber-950">
             API: {apiError.slice(0, 120)}
@@ -312,8 +412,10 @@ export function ResourcesView() {
         ) : null}
         {!useStaticFallback && !apiLoading && !apiError ? (
           <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900">
-            Live · {apiRows.length} shown
-            {apiTotal != null ? ` · ${apiTotal.toLocaleString()} total` : ''}
+            Live ·{' '}
+            {librarySource === 'salesianonline'
+              ? `${filteredSoRows.length} on page${soTotal != null ? ` · ${soTotal.toLocaleString()} total` : ''}`
+              : `${apiRows.length} shown${apiTotal != null ? ` · ${apiTotal.toLocaleString()} total` : ''}`}
           </span>
         ) : null}
         <button
@@ -331,98 +433,144 @@ export function ResourcesView() {
       </SectionHeader>
 
       <FilterBar>
-        <select
-          className={sel}
-          value={f.theme}
-          onChange={(e) => setF((s) => ({ ...s, theme: e.target.value }))}
-          aria-label="Theme"
-        >
-          <option value="">All themes</option>
-          {RESOURCE_THEME_OPTIONS.filter(Boolean).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-        <select className={sel} value={f.type} onChange={(e) => setF((s) => ({ ...s, type: e.target.value }))}>
-          <option value="">All types</option>
-          {RESOURCE_TYPE_OPTIONS.filter(Boolean).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+        {librarySource === 'salesianonline' && !useStaticFallback ? (
+          <>
+            <span className="max-w-lg text-xs text-mid">
+              Corpus filters (theme, province, …) apply to the <strong>Platform library</strong> tab. Here, search is
+              server-side; use PDF / image to narrow this page.
+            </span>
+            <select
+              className={sel}
+              value={f.docMedia}
+              onChange={(e) => setF((s) => ({ ...s, docMedia: e.target.value }))}
+              aria-label="Attachment type"
+            >
+              <option value="">All attachments</option>
+              <option value="pdf">PDF</option>
+              <option value="image">Image / media</option>
+            </select>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={soOffset <= 0 || apiLoading}
+                className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+                onClick={() => setSoOffset((o) => Math.max(0, o - SO_LIBRARY_PAGE))}
+              >
+                Previous page
+              </button>
+              <button
+                type="button"
+                disabled={
+                  apiLoading ||
+                  (soTotal != null ? soOffset + soRows.length >= soTotal : soRows.length < SO_LIBRARY_PAGE)
+                }
+                className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+                onClick={() => setSoOffset((o) => o + SO_LIBRARY_PAGE)}
+              >
+                Next page
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <select
+              className={sel}
+              value={f.theme}
+              onChange={(e) => setF((s) => ({ ...s, theme: e.target.value }))}
+              aria-label="Theme"
+            >
+              <option value="">All themes</option>
+              {RESOURCE_THEME_OPTIONS.filter(Boolean).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <select className={sel} value={f.type} onChange={(e) => setF((s) => ({ ...s, type: e.target.value }))}>
+              <option value="">All types</option>
+              {RESOURCE_TYPE_OPTIONS.filter(Boolean).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
 
-        <select
-          className={sel}
-          value={f.province}
-          onChange={(e) => setF((s) => ({ ...s, province: e.target.value }))}
-        >
-          {RESOURCE_PROVINCE_OPTIONS.map((o) => (
-            <option key={o.value || 'all'} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select className={sel} value={f.region} onChange={(e) => setF((s) => ({ ...s, region: e.target.value }))}>
-          <option value="">All Regions</option>
-          {RESOURCE_REGION_OPTIONS.filter(Boolean).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-        <select className={sel} value={f.lang} onChange={(e) => setF((s) => ({ ...s, lang: e.target.value }))}>
-          <option value="">All Languages</option>
-          {RESOURCE_LANG_OPTIONS.filter(Boolean).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-        <select className={sel} value={f.year} onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))}>
-          <option value="">All Years</option>
-          {RESOURCE_YEAR_OPTIONS.filter(Boolean).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-        <select className={sel} value={f.access} onChange={(e) => setF((s) => ({ ...s, access: e.target.value }))}>
-          <option value="">All Access</option>
-          <option value="open">Open Access</option>
-        </select>
-        <select className={sel} value={f.group} onChange={(e) => setF((s) => ({ ...s, group: e.target.value }))}>
-          <option value="">All Groups</option>
-          {RESOURCE_GROUP_OPTIONS.filter(Boolean).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-        <select
-          className={sel}
-          value={f.publisher}
-          onChange={(e) => setF((s) => ({ ...s, publisher: e.target.value }))}
-        >
-          <option value="">All Publishers</option>
-          {RESOURCE_PUBLISHERS.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-        <select className={sel} value={f.author} onChange={(e) => setF((s) => ({ ...s, author: e.target.value }))}>
-          <option value="">All Authors</option>
-          {RESOURCE_AUTHORS.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+            <select
+              className={sel}
+              value={f.province}
+              onChange={(e) => setF((s) => ({ ...s, province: e.target.value }))}
+            >
+              {RESOURCE_PROVINCE_OPTIONS.map((o) => (
+                <option key={o.value || 'all'} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select className={sel} value={f.region} onChange={(e) => setF((s) => ({ ...s, region: e.target.value }))}>
+              <option value="">All Regions</option>
+              {RESOURCE_REGION_OPTIONS.filter(Boolean).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <select className={sel} value={f.lang} onChange={(e) => setF((s) => ({ ...s, lang: e.target.value }))}>
+              <option value="">All Languages</option>
+              {RESOURCE_LANG_OPTIONS.filter(Boolean).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <select className={sel} value={f.year} onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))}>
+              <option value="">All Years</option>
+              {RESOURCE_YEAR_OPTIONS.filter(Boolean).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <select className={sel} value={f.access} onChange={(e) => setF((s) => ({ ...s, access: e.target.value }))}>
+              <option value="">All Access</option>
+              <option value="open">Open Access</option>
+            </select>
+            <select className={sel} value={f.group} onChange={(e) => setF((s) => ({ ...s, group: e.target.value }))}>
+              <option value="">All Groups</option>
+              {RESOURCE_GROUP_OPTIONS.filter(Boolean).map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <select
+              className={sel}
+              value={f.publisher}
+              onChange={(e) => setF((s) => ({ ...s, publisher: e.target.value }))}
+            >
+              <option value="">All Publishers</option>
+              {RESOURCE_PUBLISHERS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <select className={sel} value={f.author} onChange={(e) => setF((s) => ({ ...s, author: e.target.value }))}>
+              <option value="">All Authors</option>
+              {RESOURCE_AUTHORS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
         <input
           className="min-w-[180px] flex-1 rounded border border-border-sdb bg-white px-3 py-1.5 text-[13px] outline-none focus:border-sdb-blue"
-          placeholder="🔍 Search title, author, province, tags…"
+          placeholder={
+            librarySource === 'salesianonline' && !useStaticFallback
+              ? '🔍 Search title, caption, extracted fields…'
+              : '🔍 Search title, author, province, tags…'
+          }
           value={f.q}
           onChange={(e) => setF((s) => ({ ...s, q: e.target.value }))}
         />
@@ -433,7 +581,10 @@ export function ResourcesView() {
           <button
             type="button"
             className="rounded-lg border border-border-sdb bg-white px-2.5 py-1.5 text-[11px] font-semibold text-sdb-blue"
-            onClick={() => setUseStaticFallback(true)}
+            onClick={() => {
+              setUseStaticFallback(true)
+              setLibrarySource('ontology')
+            }}
           >
             Use sample data
           </button>
@@ -464,6 +615,75 @@ export function ResourcesView() {
           title="Could not load live data"
           msg={`Check that the backend is running and try again. ${apiError}`}
         />
+      ) : !useStaticFallback && librarySource === 'salesianonline' ? (
+        !filteredSoRows.length ? (
+          <EmptyState
+            icon="🖼"
+            title="No media matches"
+            msg="Try another search, page, or attachment filter (PDF / image)."
+          />
+        ) : (
+          <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredSoRows.map((row, idx) => {
+              const thumb = pickSalesianonlineThumbnailUrl(row)
+              const openUrl = pickSalesianonlineOpenUrl(row)
+              const title = row.title || row.extracted_title || row.slug || `Media #${row.id ?? row.post_id ?? '—'}`
+              const sub = row.author_name || row.parent_post_title || row.media_type || '—'
+              const cap = row.caption || row.extracted_summary || row.description
+              const tags =
+                formatOntologyCellForDisplay(row.tags_name) || formatOntologyCellForDisplay(row.extracted_tags)
+              return (
+                <div
+                  key={String(row.id ?? row.post_id ?? row.guid ?? `so-${soOffset}-${idx}`)}
+                  className="overflow-hidden rounded-xl border border-border-sdb bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-sdb-blue-light hover:shadow-md"
+                >
+                  <div className="relative flex aspect-video max-h-44 items-center justify-center bg-slate-100">
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt={row.alt_text || title}
+                        className="max-h-44 w-full object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="text-4xl text-slate-300">🖼</span>
+                    )}
+                    {row.status ? (
+                      <span className="absolute right-2 top-2 rounded bg-white/90 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-700 shadow">
+                        {row.status}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="border-t border-border-sdb px-4 py-4">
+                    <div className="text-sm font-bold leading-snug text-ink line-clamp-2">{title}</div>
+                    <div className="mt-1 text-[13px] text-mid line-clamp-1">{sub}</div>
+                    {cap ? <div className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-mid">{String(cap)}</div> : null}
+                    {tags ? (
+                      <div className="mt-1 line-clamp-2 text-[11px] text-slate-600" title={tags}>
+                        {tags}
+                      </div>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {openUrl ? (
+                        <a
+                          href={openUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-md bg-sdb-blue px-3 py-1.5 text-center text-[11px] font-semibold text-white no-underline hover:bg-sdb-blue-deep"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        <span className="self-center text-[10px] text-mid">No URL</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
       ) : !filtered.length ? (
         <EmptyState
           icon="📚"
