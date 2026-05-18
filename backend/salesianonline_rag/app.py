@@ -6,6 +6,7 @@ This module can be loaded by ``backend/main.py`` (``mount_rag_gradio``) or
 run standalone with ``python app.py``.
 """
 
+import json
 import os
 import sys
 import traceback
@@ -99,6 +100,19 @@ LANGUAGE_NAMES = {
     "POR": "Portuguese"
 }
 
+LANGUAGE_NAME_TO_CODE = {
+    "english": "EN",
+    "spanish": "ES",
+    "french": "FR",
+    "italian": "IT",
+    "portuguese": "POR",
+    "por": "POR",
+    "en": "EN",
+    "es": "ES",
+    "fr": "FR",
+    "it": "IT",
+}
+
 
 # ============================================================
 # RAG PIPELINE
@@ -145,7 +159,7 @@ def generate_answer(query, context_docs, language_pref="English"):
     for i, doc in enumerate(context_docs, 1):
         if "error" in doc:
             continue
-        icon = MEDIA_ICONS.get(doc["file_format"], "")
+        icon = MEDIA_ICONS.get(_normalize_file_format(doc.get("file_format", "")), "")
         context_parts.append(
             f"--- Source {i}: {icon} {doc['file_name']} "
             f"(Type: {doc['file_format']}, Language: {doc['language']}) ---\n"
@@ -194,25 +208,60 @@ Provide a comprehensive yet concise answer with references to the source documen
         return f"Error generating response: {str(e)}"
 
 
+def _parse_languages(lang) -> list[str]:
+    """Normalize language field (string, list, or JSON array string) to display names."""
+    if lang is None or lang == "":
+        return []
+    if isinstance(lang, list):
+        return [str(x).strip() for x in lang if str(x).strip()]
+    text = str(lang).strip()
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text.replace("'", '"'))
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return [text] if text else []
+
+
+def _language_pills_html(lang) -> str:
+    """Build compact language pill markup for a source card."""
+    names = _parse_languages(lang)
+    if not names:
+        return '<span class="src-lang-pill">🌐 Unknown</span>'
+    pills = []
+    for name in names:
+        code = LANGUAGE_NAME_TO_CODE.get(name.lower(), name.upper()[:3])
+        flag = LANGUAGE_FLAGS.get(code, "🌐")
+        pills.append(f'<span class="src-lang-pill">{flag} {name}</span>')
+    return "".join(pills)
+
+
+def _normalize_file_format(fmt: str) -> str:
+    if not fmt:
+        return "other"
+    f = str(fmt).lower().strip()
+    if f in ("ppt", "pptx", "presentation"):
+        return "ppt"
+    return f
+
+
 def format_sources(docs):
     """Format source documents as premium HTML cards with clickable file names."""
     if not docs or "error" in docs[0]:
-        return (
-            '<div style="color:#4a6b8c;font-size:.88rem;padding:.5rem 0;">'
-            "No sources retrieved."
-            "</div>"
-        )
+        return '<div class="sources-empty">No sources retrieved.</div>'
     badge_class = {
         "pdf": "src-badge-pdf",
         "audio": "src-badge-audio",
         "image": "src-badge-image",
         "video": "src-badge-video",
+        "ppt": "src-badge-ppt",
     }
-    html = ""
+    cards = ""
     for i, doc in enumerate(docs, 1):
-        icon  = MEDIA_ICONS.get(doc["file_format"], "")
-        flag  = LANGUAGE_FLAGS.get(doc["language"], LANGUAGE_FLAGS["UNKNOWN"])
-        mtype = doc["file_format"].lower()
+        mtype = _normalize_file_format(doc.get("file_format", ""))
+        icon = MEDIA_ICONS.get(mtype, "")
         bclass = badge_class.get(mtype, "src-badge-other")
         
         # Make file name clickable if URL is available
@@ -220,16 +269,16 @@ def format_sources(docs):
         if doc.get("url"):
             file_name_html = f'<a href="{doc["url"]}" target="_blank" class="src-file-link">{doc["file_name"]}</a>'
         
-        html += (
+        cards += (
             f'<div class="src-card">'
             f'  <div class="src-card-title">{i}. {icon} {file_name_html}</div>'
             f'  <div class="src-card-meta">'
             f'    <span class="src-badge {bclass}">{mtype.upper()}</span>'
-            f'    <span>{flag} {doc["language"]}</span>'
+            f'    {_language_pills_html(doc.get("language"))}'
             f'  </div>'
             f'</div>'
         )
-    return html
+    return f'<div class="sources-scroll">{cards}</div>'
 
 
 def _loading_card(title: str, hint: str) -> str:
@@ -678,17 +727,51 @@ CUSTOM_CSS = """
     font-weight: 700 !important;
 }
 
-/* ── Sources panel ── */
-.sources-panel {
+/* ── Content columns ── */
+.answer-column,
+.sources-column {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.5rem !important;
+    min-width: 0 !important;
+}
+
+.sources-panel-card {
     background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%) !important;
     border: 1.5px solid var(--border) !important;
     border-radius: var(--radius-md) !important;
-    padding: 1.1rem 1.15rem 1.3rem !important;
+    padding: 1rem 1rem 1.1rem !important;
     box-shadow: var(--shadow-md) !important;
-    height: 100% !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
-.sources-panel h3 { color: var(--blue-800) !important; font-weight: 700 !important; margin-top: 0 !important; }
-.sources-panel a { color: var(--blue-600) !important; }
+
+.sources-list,
+.gradio-container .sources-list {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}
+
+.sources-scroll {
+    max-height: min(520px, 65vh);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 2px;
+}
+
+.sources-empty {
+    color: var(--ink-muted);
+    font-size: 0.88rem;
+    padding: 0.5rem 0;
+}
+
+.sources-panel-card a,
+.sources-list a { color: var(--blue-600) !important; }
 
 /* Source cards rendered in markdown */
 .src-card {
@@ -732,6 +815,21 @@ CUSTOM_CSS = """
 .src-badge-image { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
 .src-badge-video { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
 .src-badge-other { background: var(--blue-50); color: var(--blue-600); border: 1px solid var(--blue-100); }
+.src-badge-ppt   { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+
+.src-lang-pill {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.15rem !important;
+    padding: 0.12rem 0.45rem !important;
+    border-radius: 99px !important;
+    background: var(--blue-50) !important;
+    border: 1px solid var(--blue-100) !important;
+    color: var(--ink-muted) !important;
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+}
 
 /* Clickable file name link */
 .src-file-link {
@@ -963,11 +1061,13 @@ CUSTOM_CSS = """
         min-height: 150px !important;
         border-radius: var(--radius-sm) !important;
     }
-    .sources-panel {
+    .sources-panel-card {
         border-radius: var(--radius-sm) !important;
         padding: 0.85rem 0.9rem 1rem !important;
-        margin-top: 0.7rem !important;
-        height: auto !important;
+        margin-top: 0 !important;
+    }
+    .sources-scroll {
+        max-height: min(360px, 50vh);
     }
 
     .side-inset { margin-left: 0.6rem !important; margin-right: 0.6rem !important; }
@@ -1016,7 +1116,7 @@ def create_app():
                 f"<div class='hero-home-row'>"
                 f"<a href='{GSDP_HOME_URL}' class='hero-home-link'>&#8592; Home</a>"
                 f"</div>"
-                f"<h1 class='hero-title'>GSDP Semantic Search</h1>"
+                f"<h1 class='hero-title'>Global Salesian Digital Platform Semantic Search</h1>"
                 f"<p class='hero-desc'>AI-powered search and Q&amp;A over the Salesian multilingual knowledge base &mdash; "
                 f"PDFs, audio recordings, images, and video content across five languages.</p>"
                 f"<div class='header-badges'>"
@@ -1070,8 +1170,8 @@ def create_app():
             )
 
         # ── Content: answer + sources ────────────────────────
-        with gr.Row(equal_height=True, elem_classes="content-row"):
-            with gr.Column(scale=3):
+        with gr.Row(elem_classes="content-row"):
+            with gr.Column(scale=3, elem_classes="answer-column"):
                 gr.Markdown(
                     "<div class='section-chip'>\U0001F4AC Answer</div>",
                     sanitize_html=False,
@@ -1087,19 +1187,21 @@ def create_app():
                     sanitize_html=False,
                 )
 
-            with gr.Column(scale=1, elem_classes="sources-panel"):
+            with gr.Column(scale=1, elem_classes="sources-column"):
                 gr.Markdown(
                     "<div class='section-chip'>\U0001F4DA Retrieved Sources</div>",
                     sanitize_html=False,
                 )
-                sources_output = gr.Markdown(
-                    value=(
-                        "<div style='color:#4a6b8c;font-size:.86rem;'>"
-                        "Sources will appear here after your query\u2026"
-                        "</div>"
-                    ),
-                    sanitize_html=False,
-                )
+                with gr.Column(elem_classes="sources-panel-card"):
+                    sources_output = gr.Markdown(
+                        value=(
+                            "<div class='sources-empty'>"
+                            "Sources will appear here after your query\u2026"
+                            "</div>"
+                        ),
+                        elem_classes="sources-list",
+                        sanitize_html=False,
+                    )
 
         # ── Example questions accordion ──────────────────────
         # with gr.Accordion(
@@ -1116,7 +1218,7 @@ def create_app():
         # ── Footer ──────────────────────────────────────────
         gr.Markdown(
             "<div class='footer'>"
-            "<div class='footer-logo'>\U0001F30D&nbsp; GSDP Semantic Search</div>"
+            "<div class='footer-logo'>\U0001F30D&nbsp; Global Salesian Digital Platform Semantic Search</div>"
             "<div class='footer-sub'>"
             "Powered by <strong>Bosco Soft Technologies Pvt Ltd</strong> &nbsp;&middot;&nbsp; "
             "Multilingual Salesian Knowledge Corpus &nbsp;&middot;&nbsp; "
@@ -1149,7 +1251,7 @@ def create_app():
                 "",
                 "<div style='color:#4a6b8c;font-size:.95rem;padding:.25rem 0;'>"
                 "Ask a question above to explore the knowledge base\u2026</div>",
-                "<div style='color:#4a6b8c;font-size:.86rem;'>"
+                "<div class='sources-empty'>"
                 "Sources will appear here after your query\u2026</div>",
             ),
             outputs=[query_input, answer_output, sources_output],
