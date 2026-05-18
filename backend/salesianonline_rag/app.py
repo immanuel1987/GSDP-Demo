@@ -115,11 +115,11 @@ def retrieve_context(query, media_filter="All"):
 
         search_kwargs = {
             "query_text": query,
-            "columns": ["title", "media_type", "language", "url", "content_text"],
+            "columns": ["title", "file_format", "language", "url", "content_text"],
             "num_results": 20
         }
         if media_filter and media_filter != "All":
-            search_kwargs["filters"] = {"media_type": media_filter.lower()}
+            search_kwargs["filters"] = {"file_format": media_filter.lower()}
 
         results = index.similarity_search(**search_kwargs)
 
@@ -127,7 +127,7 @@ def retrieve_context(query, media_filter="All"):
         for row in results.get("result", {}).get("data_array", []):
             documents.append({
                 "file_name": row[0],  # title column mapped to file_name
-                "media_type": row[1],
+                "file_format": row[1],
                 "language": row[2],
                 "url": row[3],
                 "content": row[4][:2000] if row[4] else ""
@@ -145,10 +145,10 @@ def generate_answer(query, context_docs, language_pref="English"):
     for i, doc in enumerate(context_docs, 1):
         if "error" in doc:
             continue
-        icon = MEDIA_ICONS.get(doc["media_type"], "")
+        icon = MEDIA_ICONS.get(doc["file_format"], "")
         context_parts.append(
             f"--- Source {i}: {icon} {doc['file_name']} "
-            f"(Type: {doc['media_type']}, Language: {doc['language']}) ---\n"
+            f"(Type: {doc['file_format']}, Language: {doc['language']}) ---\n"
             f"{doc['content']}")
     context_text = "\n\n".join(context_parts)
 
@@ -210,9 +210,9 @@ def format_sources(docs):
     }
     html = ""
     for i, doc in enumerate(docs, 1):
-        icon  = MEDIA_ICONS.get(doc["media_type"], "")
+        icon  = MEDIA_ICONS.get(doc["file_format"], "")
         flag  = LANGUAGE_FLAGS.get(doc["language"], LANGUAGE_FLAGS["UNKNOWN"])
-        mtype = doc["media_type"].lower()
+        mtype = doc["file_format"].lower()
         bclass = badge_class.get(mtype, "src-badge-other")
         
         # Make file name clickable if URL is available
