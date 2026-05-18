@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'
 
 services:
   backend:
@@ -13,6 +13,8 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
     command: uvicorn main:app --host 0.0.0.0 --port 2005 --reload
+    ports:
+      - "2005:2005"
     labels:
       - "traefik.enable=true"
 
@@ -33,5 +35,7 @@ services:
 
 networks:
   n8n-docker_web:
-    external: true
+    name: n8n-docker_web
+    # Set to true on the server where Traefik/n8n already created this network.
+    external: ${DOCKER_EXTERNAL_NETWORK:-false}
 

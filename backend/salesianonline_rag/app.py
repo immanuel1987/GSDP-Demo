@@ -1378,7 +1378,7 @@ def create_app():
             outputs=[query_input, answer_output, sources_output],
         )
 
-    app.show_api = False
+    app.show_api = True
     return app
 
 

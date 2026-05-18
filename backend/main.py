@@ -54,3 +54,7 @@ def read_root():
         "message": "Welcome to the Global Salesian Digital Platform API (v1.0.1)",
         "salesian_online_rag_ui": "/rag",
     }
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
