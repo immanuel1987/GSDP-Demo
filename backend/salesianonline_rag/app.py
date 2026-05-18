@@ -359,15 +359,19 @@ CUSTOM_CSS = """
 .gradio-container > .wrap > .contain > footer,
 .gradio-container footer { display: none !important; }
 
-/* ── Remove all scrollbars ── */
-*,
-*::before,
-*::after {
-    scrollbar-width: none !important;   /* Firefox */
-    -ms-overflow-style: none !important; /* IE / Edge */
+/* Hide scrollbars only on the main page shell — NOT on content panels */
+.gradio-container,
+.gradio-container > .wrap,
+.gradio-container > .wrap > .contain,
+.gradio-container main {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
 }
-*::-webkit-scrollbar {
-    display: none !important;           /* Chrome / Safari / Gradio iframe */
+.gradio-container::-webkit-scrollbar,
+.gradio-container > .wrap::-webkit-scrollbar,
+.gradio-container > .wrap > .contain::-webkit-scrollbar,
+.gradio-container main::-webkit-scrollbar {
+    display: none !important;
     width: 0 !important;
     height: 0 !important;
 }
@@ -707,22 +711,83 @@ CUSTOM_CSS = """
     border-color: var(--blue-400) !important;
 }
 
-/* ── Answer card ── */
-.chat-area {
+/* ── Answer panel (single scroll on outer card only) ── */
+.answer-panel-card {
     border: 1.5px solid var(--border) !important;
     border-radius: var(--radius-md) !important;
-    padding: 1.5rem 1.6rem !important;
+    padding: 1.25rem 1.1rem 1.25rem 1.35rem !important;
     background: var(--surface) !important;
     min-height: 220px !important;
+    max-height: min(520px, 65vh) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
     box-shadow: var(--shadow-md) !important;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto !important;
+    scrollbar-color: #004a99 #c9dff0 !important;
+}
+
+.answer-content,
+.gradio-container .answer-content {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
     font-size: 1rem !important;
     line-height: 1.7 !important;
 }
-.chat-area .prose,
-.chat-area p,
-.chat-area li { color: #1a1a2e !important; }
-.chat-area a { color: var(--blue-600) !important; text-decoration: underline !important; }
-.chat-area h1, .chat-area h2, .chat-area h3 {
+
+/* Prevent nested Gradio wrappers from creating a second scrollbar */
+.gradio-container .answer-panel-card .answer-content,
+.gradio-container .answer-panel-card .answer-content > div,
+.gradio-container .answer-panel-card .answer-content .wrap,
+.gradio-container .answer-panel-card .answer-content .prose,
+.gradio-container .answer-panel-card .answer-content [class*="html"],
+.gradio-container .answer-panel-card .answer-content [class*="markdown"] {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}
+
+.gradio-container .answer-panel-card::-webkit-scrollbar {
+    display: block !important;
+    -webkit-appearance: none !important;
+    width: 14px !important;
+}
+.gradio-container .answer-panel-card::-webkit-scrollbar-track {
+    background: #c9dff0 !important;
+    border-radius: 10px !important;
+    border: 2px solid #e8f2fc !important;
+    margin: 6px 2px !important;
+}
+.gradio-container .answer-panel-card::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #4a9fd4 0%, #1f6eb8 40%, #004a99 100%) !important;
+    border-radius: 10px !important;
+    border: 2px solid #c9dff0 !important;
+    min-height: 48px !important;
+}
+.gradio-container .answer-panel-card::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #1f6eb8 0%, #003a7a 100%) !important;
+}
+
+/* Hide scrollbars on any inner answer wrappers */
+.gradio-container .answer-content::-webkit-scrollbar,
+.gradio-container .answer-content .prose::-webkit-scrollbar,
+.gradio-container .answer-content > div::-webkit-scrollbar,
+.gradio-container .answer-content .wrap::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+.answer-content .prose,
+.answer-content p,
+.answer-content li { color: #1a1a2e !important; }
+.answer-content a { color: var(--blue-600) !important; text-decoration: underline !important; }
+.answer-content h1, .answer-content h2, .answer-content h3 {
     color: var(--blue-800) !important;
     font-weight: 700 !important;
 }
@@ -740,12 +805,18 @@ CUSTOM_CSS = """
     background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%) !important;
     border: 1.5px solid var(--border) !important;
     border-radius: var(--radius-md) !important;
-    padding: 1rem 1rem 1.1rem !important;
+    padding: 1rem 0.85rem 1.1rem 1rem !important;
     box-shadow: var(--shadow-md) !important;
     flex: 1 1 auto !important;
     min-height: 0 !important;
+    max-height: min(520px, 65vh) !important;
+    overflow-y: scroll !important;
+    overflow-x: hidden !important;
     display: flex !important;
     flex-direction: column !important;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto !important;
+    scrollbar-color: #004a99 #c9dff0 !important;
 }
 
 .sources-list,
@@ -755,13 +826,57 @@ CUSTOM_CSS = """
     box-shadow: none !important;
     padding: 0 !important;
     min-height: 0 !important;
+    overflow: visible !important;
 }
 
 .sources-scroll {
-    max-height: min(520px, 65vh);
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-right: 2px;
+    overflow: visible;
+    padding-right: 4px;
+}
+
+/* Prevent nested scroll inside sources markdown */
+.gradio-container .sources-panel-card .sources-list,
+.gradio-container .sources-panel-card .sources-list > div,
+.gradio-container .sources-panel-card .sources-list .wrap,
+.gradio-container .sources-panel-card .sources-list .prose,
+.gradio-container .sources-panel-card .sources-scroll {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}
+
+.gradio-container .sources-list::-webkit-scrollbar,
+.gradio-container .sources-list .prose::-webkit-scrollbar,
+.gradio-container .sources-list > div::-webkit-scrollbar,
+.gradio-container .sources-list .wrap::-webkit-scrollbar,
+.gradio-container .sources-scroll::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Single visible scrollbar on sources panel only */
+.gradio-container .sources-panel-card::-webkit-scrollbar {
+    display: block !important;
+    -webkit-appearance: none !important;
+    width: 14px !important;
+    height: 14px !important;
+}
+.gradio-container .sources-panel-card::-webkit-scrollbar-track {
+    background: #c9dff0 !important;
+    border-radius: 10px !important;
+    border: 2px solid #e8f2fc !important;
+    margin: 6px 2px !important;
+}
+.gradio-container .sources-panel-card::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #4a9fd4 0%, #1f6eb8 40%, #004a99 100%) !important;
+    border-radius: 10px !important;
+    border: 2px solid #c9dff0 !important;
+    min-height: 48px !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.25) !important;
+}
+.gradio-container .sources-panel-card::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #1f6eb8 0%, #003a7a 100%) !important;
 }
 
 .sources-empty {
@@ -1056,18 +1171,23 @@ CUSTOM_CSS = """
     }
     .content-row > * { width: 100% !important; min-width: 0 !important; flex: none !important; }
 
-    .chat-area {
-        padding: 1rem !important;
+    .answer-panel-card {
+        padding: 1rem 0.85rem 1rem 1rem !important;
         min-height: 150px !important;
         border-radius: var(--radius-sm) !important;
+        max-height: min(360px, 50vh) !important;
+    }
+    .gradio-container .answer-panel-card::-webkit-scrollbar {
+        width: 12px !important;
     }
     .sources-panel-card {
         border-radius: var(--radius-sm) !important;
-        padding: 0.85rem 0.9rem 1rem !important;
+        padding: 0.85rem 0.75rem 1rem 0.85rem !important;
         margin-top: 0 !important;
+        max-height: min(360px, 50vh) !important;
     }
-    .sources-scroll {
-        max-height: min(360px, 50vh);
+    .gradio-container .sources-panel-card::-webkit-scrollbar {
+        width: 12px !important;
     }
 
     .side-inset { margin-left: 0.6rem !important; margin-right: 0.6rem !important; }
@@ -1176,16 +1296,17 @@ def create_app():
                     "<div class='section-chip'>\U0001F4AC Answer</div>",
                     sanitize_html=False,
                 )
-                answer_output = gr.Markdown(
-                    value=(
-                        "<div style='color:#4a6b8c;font-size:.95rem;padding:.25rem 0;'>"
-                        "Ask a question above to explore the knowledge base\u2026"
-                        "</div>"
-                    ),
-                    label="",
-                    elem_classes="chat-area",
-                    sanitize_html=False,
-                )
+                with gr.Column(elem_classes="answer-panel-card"):
+                    answer_output = gr.Markdown(
+                        value=(
+                            "<div style='color:#4a6b8c;font-size:.95rem;padding:.25rem 0;'>"
+                            "Ask a question above to explore the knowledge base\u2026"
+                            "</div>"
+                        ),
+                        label="",
+                        elem_classes="answer-content",
+                        sanitize_html=False,
+                    )
 
             with gr.Column(scale=1, elem_classes="sources-column"):
                 gr.Markdown(
