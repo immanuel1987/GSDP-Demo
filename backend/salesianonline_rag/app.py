@@ -17,31 +17,33 @@ from fastapi import FastAPI
 # CONFIGURATION
 # ============================================================
 ENDPOINT_NAME = os.environ.get("VECTOR_SEARCH_ENDPOINT", "multimodal_endpoint")
-INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "salesianonline.gold.vector_content_index")
+INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "salesianonline.gold.vector_content_new_index")
 LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
 # Browser "Home" from the RAG UI (e.g. frontend URL or "/"). Defaults to site root on the same origin.
 GSDP_HOME_URL = os.environ.get("GSDP_HOME_URL", "https://gsdp-dev.cristoerp.com/")
 
 # Get Databricks credentials from environment or use defaults
 # In Databricks Apps, these are automatically provided
-DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", 
-                                 os.environ.get("DATABRICKS_SERVER_HOSTNAME", 
-                                               "https://dbc-f99975de-9224.cloud.databricks.com"))
-DATABRICKS_TOKEN = os.environ.get("DATABRICKS_TOKEN",
-                                  os.environ.get("DATABRICKS_ACCESS_TOKEN", 
-                                                "dapia5554ab24c1fa7f53da24f14fb0d7620"))
+_host = os.environ.get("DATABRICKS_SERVER_HOSTNAME", "https://dbc-f99975de-9224.cloud.databricks.com")
+# Ensure the host has https:// scheme
+if not _host.startswith("http://") and not _host.startswith("https://"):
+    DATABRICKS_HOST = f"https://{_host}"
+else:
+    DATABRICKS_HOST = _host
+
+DATABRICKS_TOKEN = os.environ.get("DATABRICKS_ACCESS_TOKEN", "dapia5554ab24c1fa7f53da24f14fb0d7620")
 
 
 # ============================================================
 # AUTHENTICATION
 # ============================================================
 def get_host():
-    """Return the hardcoded Databricks host."""
+    """Return the Databricks host with proper URL scheme."""
     return DATABRICKS_HOST
 
 
 def get_token():
-    """Return the hardcoded personal access token."""
+    """Return the personal access token."""
     return DATABRICKS_TOKEN
 
 
@@ -113,22 +115,21 @@ def retrieve_context(query, media_filter="All"):
 
         search_kwargs = {
             "query_text": query,
-            "columns": ["file_name", "media_type_code", "language_code",
-                        "content_density", "content_text"],
-            "num_results": 10
+            "columns": ["title", "media_type", "language", "url", "content_text"],
+            "num_results": 20
         }
         if media_filter and media_filter != "All":
-            search_kwargs["filters"] = {"media_type_code": media_filter.lower()}
+            search_kwargs["filters"] = {"media_type": media_filter.lower()}
 
         results = index.similarity_search(**search_kwargs)
 
         documents = []
         for row in results.get("result", {}).get("data_array", []):
             documents.append({
-                "file_name": row[0],
+                "file_name": row[0],  # title column mapped to file_name
                 "media_type": row[1],
                 "language": row[2],
-                "density": row[3],
+                "url": row[3],
                 "content": row[4][:2000] if row[4] else ""
             })
         return documents
@@ -194,7 +195,7 @@ Provide a comprehensive yet concise answer with references to the source documen
 
 
 def format_sources(docs):
-    """Format source documents as premium HTML cards."""
+    """Format source documents as premium HTML cards with clickable file names."""
     if not docs or "error" in docs[0]:
         return (
             '<div style="color:#4a6b8c;font-size:.88rem;padding:.5rem 0;">'
@@ -213,15 +214,18 @@ def format_sources(docs):
         flag  = LANGUAGE_FLAGS.get(doc["language"], LANGUAGE_FLAGS["UNKNOWN"])
         mtype = doc["media_type"].lower()
         bclass = badge_class.get(mtype, "src-badge-other")
-        den   = doc.get("density", "—")
-        den_cls = "src-density-high" if den == "high" else "src-density-low"
+        
+        # Make file name clickable if URL is available
+        file_name_html = doc["file_name"]
+        if doc.get("url"):
+            file_name_html = f'<a href="{doc["url"]}" target="_blank" class="src-file-link">{doc["file_name"]}</a>'
+        
         html += (
             f'<div class="src-card">'
-            f'  <div class="src-card-title">{i}. {icon} {doc["file_name"]}</div>'
+            f'  <div class="src-card-title">{i}. {icon} {file_name_html}</div>'
             f'  <div class="src-card-meta">'
             f'    <span class="src-badge {bclass}">{mtype.upper()}</span>'
             f'    <span>{flag} {doc["language"]}</span>'
-            f'    <span class="{den_cls}">&#9679; {den} density</span>'
             f'  </div>'
             f'</div>'
         )
@@ -728,8 +732,17 @@ CUSTOM_CSS = """
 .src-badge-image { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
 .src-badge-video { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
 .src-badge-other { background: var(--blue-50); color: var(--blue-600); border: 1px solid var(--blue-100); }
-.src-density-high { color: #15803d; }
-.src-density-low  { color: #b45309; }
+
+/* Clickable file name link */
+.src-file-link {
+    color: var(--blue-600) !important;
+    text-decoration: none !important;
+    transition: all .15s ease !important;
+}
+.src-file-link:hover {
+    color: var(--blue-700) !important;
+    text-decoration: underline !important;
+}
 
 /* ── Accordion ── */
 .gradio-container .rag-accordion {
