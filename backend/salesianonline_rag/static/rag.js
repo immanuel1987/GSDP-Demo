@@ -12,11 +12,24 @@
   const PLACEHOLDER_SOURCES =
     '<div class="sources-empty">Sources will appear here after your query&hellip;</div>';
 
+  const INPUT_LANG = {
+    EN: 'en',
+    ES: 'es',
+    FR: 'fr',
+    IT: 'it',
+    POR: 'pt',
+  };
+
   let busy = false;
 
   function selectedLangCode() {
     const checked = document.querySelector('input[name="lang"]:checked');
     return checked ? checked.value : 'EN';
+  }
+
+  function syncQueryInputLang() {
+    if (!queryInput) return;
+    queryInput.lang = INPUT_LANG[selectedLangCode()] || 'en';
   }
 
   function setBusy(on) {
@@ -35,6 +48,18 @@
 
   function setSources(html) {
     sourcesOutput.innerHTML = html;
+  }
+
+  function applyUiLabels(labels) {
+    if (!labels) return;
+    const answerChip = document.getElementById('label-answer');
+    const sourcesChip = document.getElementById('label-sources');
+    if (answerChip && labels.answer) {
+      answerChip.textContent = `\u{1F4AC} ${labels.answer}`;
+    }
+    if (sourcesChip && labels.sources) {
+      sourcesChip.textContent = `\u{1F4DA} ${labels.sources}`;
+    }
   }
 
   async function consumeSse(response, onEvent) {
@@ -80,6 +105,7 @@
       await consumeSse(res, (data) => {
         if (data.answer_html !== undefined) setAnswer(data.answer_html);
         if (data.sources_html !== undefined) setSources(data.sources_html);
+        if (data.ui_labels) applyUiLabels(data.ui_labels);
       });
     } catch (err) {
       setAnswer(`<p><strong>Error:</strong> ${escapeHtml(String(err.message || err))}</p>`);
@@ -102,6 +128,8 @@
 
       await consumeSse(res, (data) => {
         if (data.answer_html !== undefined) setAnswer(data.answer_html);
+        if (data.sources_html !== undefined) setSources(data.sources_html);
+        if (data.ui_labels) applyUiLabels(data.ui_labels);
       });
     } catch (err) {
       setAnswer(`<p><strong>Error:</strong> ${escapeHtml(String(err.message || err))}</p>`);
@@ -136,6 +164,16 @@
     }
   });
   langRadios.forEach((radio) => {
-    radio.addEventListener('change', runLanguageSwitch);
+    radio.addEventListener('change', () => {
+      syncQueryInputLang();
+      runLanguageSwitch();
+    });
   });
+
+  mediaFilter.addEventListener('change', () => {
+    if (busy || !queryInput.value.trim()) return;
+    runQuery();
+  });
+
+  syncQueryInputLang();
 })();

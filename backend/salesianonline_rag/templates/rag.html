@@ -39,6 +39,10 @@
         <textarea
           id="query-input"
           rows="2"
+          lang="en"
+          spellcheck="true"
+          autocorrect="on"
+          autocapitalize="sentences"
           placeholder="&#128270; Ask anything &mdash; e.g., What is the Preventive System methodology?"
         ></textarea>
         <div class="search-actions">
@@ -53,6 +57,8 @@
           <select id="media-filter">
             <option value="All">All</option>
             <option value="PDF">PDF</option>
+            <option value="Document">Document</option>
+            <option value="Presentation">Presentation</option>
             <option value="Audio">Audio</option>
             <option value="Image">Image</option>
             <option value="Video">Video</option>
@@ -67,19 +73,19 @@
             </label>
             <label class="lang-opt">
               <input type="radio" name="lang" value="ES" />
-              <span>&#127466;&#127480; Espa&ntilde;ol</span>
+              <span>&#127466;&#127480; Spanish</span>
             </label>
             <label class="lang-opt">
               <input type="radio" name="lang" value="FR" />
-              <span>&#127467;&#127479; Fran&ccedil;ais</span>
+              <span>&#127467;&#127479; French</span>
             </label>
             <label class="lang-opt">
               <input type="radio" name="lang" value="IT" />
-              <span>&#127470;&#127481; Italiano</span>
+              <span>&#127470;&#127481; Italian</span>
             </label>
             <label class="lang-opt">
               <input type="radio" name="lang" value="POR" />
-              <span>&#127463;&#127479; Portugu&ecirc;s</span>
+              <span>&#127463;&#127479; Portuguese</span>
             </label>
           </div>
         </fieldset>
@@ -87,7 +93,7 @@
 
       <section class="content-row">
         <article class="answer-column">
-          <span class="section-chip">&#128172; Answer</span>
+          <span class="section-chip" id="label-answer">&#128172; Answer</span>
           <div class="answer-panel-card">
             <div id="answer-output" class="answer-content answer-placeholder">
               Ask a question above to explore the knowledge base&hellip;
@@ -95,7 +101,7 @@
           </div>
         </article>
         <aside class="sources-column">
-          <span class="section-chip">&#128218; Retrieved Sources</span>
+          <span class="section-chip" id="label-sources">&#128218; Retrieved Sources</span>
           <div class="sources-panel-card">
             <div id="sources-output" class="sources-list">
               <div class="sources-empty">Sources will appear here after your query&hellip;</div>
