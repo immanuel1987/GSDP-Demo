@@ -2,7 +2,7 @@
 GSDP Semantic Search — RAG assistant over multilingual educational content
 (PDFs, audio, images, video).
 
-This module can be loaded by ``backend/main.py`` (``mount_rag_gradio``) or 
+This module can be loaded by ``backend/main.py`` (``mount_rag_ui``) or 
 run standalone with ``python app.py``.
 """
 
@@ -10,9 +10,12 @@ import json
 import os
 import sys
 import traceback
-import requests as http_requests
-import gradio as gr
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import APIRouter, FastAPI
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from markdown_it import MarkdownIt
+from pydantic import BaseModel
 
 # ============================================================
 # CONFIGURATION
@@ -113,12 +116,19 @@ LANGUAGE_NAME_TO_CODE = {
     "it": "IT",
 }
 
+DEFAULT_LANG_CODE = "EN"
+
 
 # ============================================================
 # RAG PIPELINE
 # ============================================================
 _last_query = ""
 _last_docs = []
+_last_lang_code = DEFAULT_LANG_CODE
+
+
+def _language_name(lang_code: str) -> str:
+    return LANGUAGE_NAMES.get((lang_code or DEFAULT_LANG_CODE).upper(), "English")
 
 
 def retrieve_context(query, media_filter="All"):
@@ -306,1101 +316,122 @@ LOADING_LANGUAGE = _loading_card(
 )
 
 
-def chat(message, media_filter):
-    """Main RAG pipeline: retrieve + generate (with loading states)."""
-    global _last_query, _last_docs
+# ============================================================
+# WEB UI (HTML / CSS / JS)
+# ============================================================
+_PKG_DIR = Path(__file__).resolve().parent
+_STATIC_DIR = _PKG_DIR / "static"
+_TEMPLATE_PATH = _PKG_DIR / "templates" / "rag.html"
+_md = MarkdownIt()
+
+
+def markdown_to_html(text: str) -> str:
+    if not text or not text.strip():
+        return ""
+    stripped = text.strip()
+    if stripped.startswith("<") and any(tag in stripped for tag in ("<div", "<p", "<span")):
+        return text
+    return _md.render(text)
+
+
+class QueryRequest(BaseModel):
+    query: str
+    media_filter: str = "All"
+    lang_code: str = DEFAULT_LANG_CODE
+
+
+class LanguageRequest(BaseModel):
+    lang_code: str = DEFAULT_LANG_CODE
+
+
+def _sse_payload(answer_html: str | None = None, sources_html: str | None = None) -> str:
+    data = {}
+    if answer_html is not None:
+        data["answer_html"] = answer_html
+    if sources_html is not None:
+        data["sources_html"] = sources_html
+    return f"data: {json.dumps(data)}\n\n"
+
+
+def _chat_events(message: str, media_filter: str, lang_code: str = DEFAULT_LANG_CODE):
+    global _last_query, _last_docs, _last_lang_code
     if not message or not message.strip():
-        yield "", ""
+        yield _sse_payload("", "")
         return
-    yield LOADING_RETRIEVE, LOADING_RETRIEVE
+
+    yield _sse_payload(LOADING_RETRIEVE, LOADING_RETRIEVE)
     _last_query = message.strip()
+    _last_lang_code = (lang_code or DEFAULT_LANG_CODE).upper()
     docs = retrieve_context(message, media_filter=media_filter)
     _last_docs = docs
+
     if docs and "error" in docs[0]:
-        yield f"**Retrieval error:** {docs[0]['error']}", "*No sources available.*"
+        err = f"<p><strong>Retrieval error:</strong> {docs[0]['error']}</p>"
+        yield _sse_payload(err, '<div class="sources-empty">No sources available.</div>')
         return
+
     sources = format_sources(docs)
-    yield LOADING_GENERATE, sources
-    answer = generate_answer(message, docs, language_pref="English")
-    yield answer, sources
+    yield _sse_payload(LOADING_GENERATE, sources)
+    answer = generate_answer(message, docs, language_pref=_language_name(_last_lang_code))
+    yield _sse_payload(markdown_to_html(answer), sources)
 
 
-def switch_language(lang_choice):
-    """Re-generate the answer in the selected language."""
-    global _last_query, _last_docs
+def _language_events(lang_code: str):
+    global _last_query, _last_docs, _last_lang_code
     if not _last_query or not _last_docs:
-        yield "*Ask a question first, then switch languages.*"
+        yield _sse_payload(
+            "<p><em>Ask a question first, then switch languages.</em></p>"
+        )
         return
     if _last_docs and "error" in _last_docs[0]:
-        yield "No content available to translate."
+        yield _sse_payload("<p>No content available to translate.</p>")
         return
-    lang_map = {
-        "\U0001F1EC\U0001F1E7 English": "EN",
-        "\U0001F1EA\U0001F1F8 Espa\u00f1ol": "ES",
-        "\U0001F1EB\U0001F1F7 Fran\u00e7ais": "FR",
-        "\U0001F1EE\U0001F1F9 Italiano": "IT",
-        "\U0001F1E7\U0001F1F7 Portugu\u00eas": "POR"
-    }
-    code = lang_map.get(lang_choice, "EN")
-    language_name = LANGUAGE_NAMES.get(code, "English")
-    yield LOADING_LANGUAGE
-    yield generate_answer(_last_query, _last_docs, language_pref=language_name)
 
-
-# ============================================================
-# GRADIO UI
-# ============================================================
-CUSTOM_CSS = """
-/* ============================================================
-   GSDP Semantic Search — Premium UI
-   ============================================================ */
-
-/* Hide Gradio built-in footer */
-.gradio-container > .wrap > .contain > footer,
-.gradio-container footer { display: none !important; }
-
-/* Hide scrollbars only on the main page shell — NOT on content panels */
-.gradio-container,
-.gradio-container > .wrap,
-.gradio-container > .wrap > .contain,
-.gradio-container main {
-    scrollbar-width: none !important;
-    -ms-overflow-style: none !important;
-}
-.gradio-container::-webkit-scrollbar,
-.gradio-container > .wrap::-webkit-scrollbar,
-.gradio-container > .wrap > .contain::-webkit-scrollbar,
-.gradio-container main::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-}
-
-/* ── Base container ── */
-.gradio-container {
-    --blue-900: #051a30;
-    --blue-800: #082f4d;
-    --blue-700: #0c3d6b;
-    --blue-600: #004a99;
-    --blue-500: #1f6eb8;
-    --blue-400: #4a9fd4;
-    --blue-100: #daeaf8;
-    --blue-50:  #eef4fc;
-    --surface:  #ffffff;
-    --surface-2: #f5f8fd;
-    --border:   #d0dff0;
-    --border-2: #bccfe8;
-    --ink:      #0f2744;
-    --ink-muted:#4a6b8c;
-    --shadow-sm: 0 1px 3px rgba(8,28,56,.07), 0 1px 2px rgba(8,28,56,.04);
-    --shadow-md: 0 4px 16px -2px rgba(8,28,56,.10), 0 2px 6px -1px rgba(8,28,56,.06);
-    --shadow-lg: 0 12px 40px -8px rgba(0,74,153,.18), 0 4px 12px -2px rgba(8,28,56,.08);
-    --radius-sm: 10px;
-    --radius-md: 14px;
-    --radius-lg: 20px;
-
-    --body-background-fill: var(--blue-50) !important;
-    --background-fill-primary: var(--surface) !important;
-    --background-fill-secondary: var(--surface-2) !important;
-    --border-color-primary: var(--border) !important;
-    --body-text-color: var(--ink) !important;
-    --block-label-text-color: var(--blue-800) !important;
-    --block-title-text-color: var(--blue-800) !important;
-    --input-background-fill: var(--surface) !important;
-    --input-border-color: var(--border-2) !important;
-    --button-primary-background-fill: var(--blue-600) !important;
-    --button-primary-text-color: #ffffff !important;
-    color-scheme: light !important;
-
-    max-width: 100% !important;
-    margin: 0 !important;
-    min-height: 100vh;
-    padding: 0 !important;
-    font-family: "Source Sans 3", "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif !important;
-    background:
-        radial-gradient(ellipse 130% 60% at 50% -10%, rgba(31,110,184,.13) 0%, transparent 60%),
-        radial-gradient(ellipse 80%  40% at 95%  10%, rgba(0,74,153,.07)  0%, transparent 50%),
-        linear-gradient(170deg, #e8f2fc 0%, #eef4fc 40%, #f3f7fd 100%) !important;
-    color: var(--ink) !important;
-}
-
-.gradio-container .wrap,
-.gradio-container .contain,
-.gradio-container main { color: var(--ink) !important; }
-.gradio-container .panel { background: transparent !important; }
-
-/* ── Page wrapper ── */
-.page-wrap {
-    max-width: 1240px !important;
-    margin: 0 auto !important;
-    padding: 0 1.5rem 2.5rem !important;
-}
-
-
-/* ── Top nav bar ── */
-.top-nav-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.65rem 1.75rem;
-    background: rgba(255,255,255,.88);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-    box-shadow: 0 1px 6px rgba(8,28,56,.05);
-    width: 100%;
-    box-sizing: border-box;
-}
-.top-nav-home {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    font-weight: 600;
-    font-size: 0.875rem;
-    color: var(--blue-800);
-    text-decoration: none;
-    padding: 0.35rem 0.9rem;
-    border-radius: 8px;
-    border: 1.5px solid var(--border-2);
-    background: var(--surface);
-    box-shadow: var(--shadow-sm);
-    transition: all .15s ease;
-    white-space: nowrap;
-}
-.top-nav-home:hover {
-    background: var(--blue-50);
-    border-color: var(--blue-400);
-    color: var(--blue-600);
-    text-decoration: none;
-}
-.top-nav-brand {
-    font-weight: 700;
-    font-size: 0.88rem;
-    color: var(--blue-600);
-    letter-spacing: .01em;
-    white-space: nowrap;
-}
-
-/* ── Hero header ── */
-.header-section {
-    position: relative !important;
-    background: linear-gradient(118deg, #061526 0%, #0a2d54 30%, #093368 55%, #0d4a8f 80%, #004a99 100%) !important;
-    padding: 1.4rem 2rem 1.3rem !important;
-    border-radius: var(--radius-lg) !important;
-    margin: 0.75rem 1.5rem 1.25rem !important;
-    border: none !important;
-    box-shadow: 0 6px 24px -4px rgba(0,74,153,.30), 0 2px 6px rgba(8,28,56,.15) !important;
-}
-
-
-/* dot-grid texture */
-.header-section::after {
-    content: "" !important;
-    position: absolute !important;
-    inset: 0 !important;
-    background-image: radial-gradient(rgba(255,255,255,.08) 1px, transparent 1px) !important;
-    background-size: 22px 22px !important;
-    pointer-events: none !important;
-}
-
-.header-section > * { position: relative !important; z-index: 1 !important; }
-
-/* hero inner wrapper — centers everything */
-.hero-inner {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    width: 100%;
-}
-
-/* Home link row — sits above the title */
-.hero-home-row {
-    width: 100%;
-    display: flex;
-    justify-content: flex-start;
-    margin-bottom: 0.6rem;
-}
-.hero-home-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.28rem;
-    font-weight: 600;
-    font-size: 0.82rem;
-    color: rgba(220,238,255,.95);
-    text-decoration: none;
-    padding: 0.3rem 0.85rem;
-    border-radius: 99px;
-    border: 1.5px solid rgba(255,255,255,.3);
-    background: rgba(255,255,255,.12);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: all .18s ease;
-    white-space: nowrap;
-}
-.hero-home-link:hover {
-    background: rgba(255,255,255,.22);
-    border-color: rgba(255,255,255,.6);
-    color: #ffffff;
-    text-decoration: none;
-}
-
-.hero-title {
-    color: #ffffff !important;
-    font-size: 1.55rem !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.025em !important;
-    line-height: 1.2 !important;
-    margin: 0 0 0.35rem !important;
-    text-shadow: 0 2px 10px rgba(0,0,0,.22) !important;
-}
-.hero-desc {
-    color: rgba(210,230,255,.88) !important;
-    font-size: 0.9rem !important;
-    margin: 0 !important;
-    max-width: 46rem !important;
-    line-height: 1.55 !important;
-}
-
-/* override old h1/p inside header-section if Gradio injects them */
-.header-section h1 {
-    color: #ffffff !important;
-    font-size: 1.55rem !important;
-    font-weight: 800 !important;
-    letter-spacing: -0.025em !important;
-    line-height: 1.2 !important;
-    margin: 0 !important;
-    text-shadow: 0 2px 10px rgba(0,0,0,.22) !important;
-    text-align: center !important;
-}
-.header-section p {
-    color: rgba(210,230,255,.88) !important;
-    font-size: 0.9rem !important;
-    margin-top: 0.3rem !important;
-    max-width: 50rem !important;
-    line-height: 1.55 !important;
-    text-align: center !important;
-}
-
-/* badge strip */
-.header-badges {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    justify-content: center !important;
-    gap: 0.35rem !important;
-    margin-top: 0.7rem !important;
-}
-.hbadge {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 0.25rem !important;
-    padding: 0.18rem 0.55rem !important;
-    border-radius: 99px !important;
-    background: rgba(255,255,255,.12) !important;
-    border: 1px solid rgba(255,255,255,.2) !important;
-    color: rgba(220,238,255,.92) !important;
-    font-size: 0.72rem !important;
-    font-weight: 600 !important;
-    backdrop-filter: blur(6px) !important;
-    letter-spacing: .01em !important;
-}
-
-/* ── Search card ── */
-.search-card {
-    background: var(--surface) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius-md) !important;
-    padding: 1.2rem 1.4rem !important;
-    margin: 0 1.5rem 1rem !important;
-    box-shadow: var(--shadow-md) !important;
-}
-
-/* ── Toolbar row (media + language) ── */
-.toolbar-row {
-    background: linear-gradient(180deg, #fff 0%, var(--surface-2) 100%) !important;
-    border: 1px solid var(--border) !important;
-    padding: 0.8rem 1.2rem !important;
-    border-radius: var(--radius-md) !important;
-    margin: 0 1.5rem 1.1rem !important;
-    box-shadow: var(--shadow-sm) !important;
-    align-items: center !important;
-}
-
-/* ── Side-inset utility (matches hero/search margins) ── */
-.content-row,
-.side-inset {
-    margin-left: 1.5rem !important;
-    margin-right: 1.5rem !important;
-}
-
-/* ── Labels ── */
-.gradio-container .label-wrap label,
-.gradio-container label span {
-    color: var(--blue-800) !important;
-    font-weight: 600 !important;
-    font-size: 0.82rem !important;
-    letter-spacing: .02em !important;
-    text-transform: uppercase !important;
-}
-
-/* ── Inputs & textareas ── */
-.gradio-container textarea,
-.gradio-container input:not([type="checkbox"]):not([type="radio"]) {
-    background: var(--surface) !important;
-    color: var(--ink) !important;
-    border: 1.5px solid var(--border-2) !important;
-    border-radius: var(--radius-sm) !important;
-    box-shadow: var(--shadow-sm) !important;
-    font-size: 1rem !important;
-    transition: border-color .15s, box-shadow .15s !important;
-}
-.gradio-container textarea:focus,
-.gradio-container input:focus {
-    border-color: var(--blue-600) !important;
-    box-shadow: 0 0 0 3px rgba(0,74,153,.14) !important;
-    outline: none !important;
-}
-
-/* ── Dropdown ── */
-.gradio-container .wrap_inner,
-.gradio-container [class*="dropdown"] { color: var(--ink) !important; }
-.gradio-container .options,
-.gradio-container ul.options,
-.gradio-container .options-wrap {
-    background: var(--surface) !important;
-    border: 1px solid var(--border-2) !important;
-    border-radius: var(--radius-sm) !important;
-    box-shadow: 0 12px 40px -8px rgba(8,28,56,.18) !important;
-}
-
-/* ── Radio (language) ── */
-.gradio-container input[type="radio"],
-.gradio-container input[type="checkbox"] { accent-color: var(--blue-600) !important; }
-.gradio-container .radio-group,
-.gradio-container fieldset { border-color: transparent !important; }
-
-/* ── Buttons ── */
-.gradio-container button.primary,
-.gradio-container .lg.primary {
-    background: linear-gradient(160deg, #2178c4 0%, #004a99 60%, #003a7a 100%) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(0,58,122,.6) !important;
-    border-radius: var(--radius-sm) !important;
-    font-weight: 700 !important;
-    letter-spacing: .01em !important;
-    box-shadow: 0 4px 14px rgba(0,74,153,.30), 0 1px 3px rgba(0,74,153,.2) !important;
-    transition: all .2s ease !important;
-}
-.gradio-container button.primary:hover,
-.gradio-container .lg.primary:hover {
-    background: linear-gradient(160deg, #004a99 0%, #003a7a 100%) !important;
-    box-shadow: 0 6px 20px rgba(0,74,153,.38) !important;
-    transform: translateY(-1px) !important;
-}
-.gradio-container button.secondary {
-    background: var(--surface) !important;
-    color: var(--blue-800) !important;
-    border: 1.5px solid var(--border-2) !important;
-    border-radius: var(--radius-sm) !important;
-    font-weight: 600 !important;
-    box-shadow: var(--shadow-sm) !important;
-    transition: all .15s !important;
-}
-.gradio-container button.secondary:hover {
-    background: var(--blue-50) !important;
-    border-color: var(--blue-400) !important;
-}
-
-/* ── Answer panel (single scroll on outer card only) ── */
-.answer-panel-card {
-    border: 1.5px solid var(--border) !important;
-    border-radius: var(--radius-md) !important;
-    padding: 1.25rem 1.1rem 1.25rem 1.35rem !important;
-    background: var(--surface) !important;
-    min-height: 220px !important;
-    max-height: min(520px, 65vh) !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    box-shadow: var(--shadow-md) !important;
-    scrollbar-gutter: stable;
-    scrollbar-width: auto !important;
-    scrollbar-color: #004a99 #c9dff0 !important;
-}
-
-.answer-content,
-.gradio-container .answer-content {
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-    font-size: 1rem !important;
-    line-height: 1.7 !important;
-}
-
-/* Prevent nested Gradio wrappers from creating a second scrollbar */
-.gradio-container .answer-panel-card .answer-content,
-.gradio-container .answer-panel-card .answer-content > div,
-.gradio-container .answer-panel-card .answer-content .wrap,
-.gradio-container .answer-panel-card .answer-content .prose,
-.gradio-container .answer-panel-card .answer-content [class*="html"],
-.gradio-container .answer-panel-card .answer-content [class*="markdown"] {
-    overflow: visible !important;
-    max-height: none !important;
-    height: auto !important;
-}
-
-.gradio-container .answer-panel-card::-webkit-scrollbar {
-    display: block !important;
-    -webkit-appearance: none !important;
-    width: 14px !important;
-}
-.gradio-container .answer-panel-card::-webkit-scrollbar-track {
-    background: #c9dff0 !important;
-    border-radius: 10px !important;
-    border: 2px solid #e8f2fc !important;
-    margin: 6px 2px !important;
-}
-.gradio-container .answer-panel-card::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #4a9fd4 0%, #1f6eb8 40%, #004a99 100%) !important;
-    border-radius: 10px !important;
-    border: 2px solid #c9dff0 !important;
-    min-height: 48px !important;
-}
-.gradio-container .answer-panel-card::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #1f6eb8 0%, #003a7a 100%) !important;
-}
-
-/* Hide scrollbars on any inner answer wrappers */
-.gradio-container .answer-content::-webkit-scrollbar,
-.gradio-container .answer-content .prose::-webkit-scrollbar,
-.gradio-container .answer-content > div::-webkit-scrollbar,
-.gradio-container .answer-content .wrap::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-}
-
-.answer-content .prose,
-.answer-content p,
-.answer-content li { color: #1a1a2e !important; }
-.answer-content a { color: var(--blue-600) !important; text-decoration: underline !important; }
-.answer-content h1, .answer-content h2, .answer-content h3 {
-    color: var(--blue-800) !important;
-    font-weight: 700 !important;
-}
-
-/* ── Content columns ── */
-.answer-column,
-.sources-column {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 0.5rem !important;
-    min-width: 0 !important;
-}
-
-.sources-panel-card {
-    background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%) !important;
-    border: 1.5px solid var(--border) !important;
-    border-radius: var(--radius-md) !important;
-    padding: 1rem 0.85rem 1.1rem 1rem !important;
-    box-shadow: var(--shadow-md) !important;
-    flex: 1 1 auto !important;
-    min-height: 0 !important;
-    max-height: min(520px, 65vh) !important;
-    overflow-y: scroll !important;
-    overflow-x: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-    scrollbar-gutter: stable;
-    scrollbar-width: auto !important;
-    scrollbar-color: #004a99 #c9dff0 !important;
-}
-
-.sources-list,
-.gradio-container .sources-list {
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-}
-
-.sources-scroll {
-    overflow: visible;
-    padding-right: 4px;
-}
-
-/* Prevent nested scroll inside sources markdown */
-.gradio-container .sources-panel-card .sources-list,
-.gradio-container .sources-panel-card .sources-list > div,
-.gradio-container .sources-panel-card .sources-list .wrap,
-.gradio-container .sources-panel-card .sources-list .prose,
-.gradio-container .sources-panel-card .sources-scroll {
-    overflow: visible !important;
-    max-height: none !important;
-    height: auto !important;
-}
-
-.gradio-container .sources-list::-webkit-scrollbar,
-.gradio-container .sources-list .prose::-webkit-scrollbar,
-.gradio-container .sources-list > div::-webkit-scrollbar,
-.gradio-container .sources-list .wrap::-webkit-scrollbar,
-.gradio-container .sources-scroll::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-}
-
-/* Single visible scrollbar on sources panel only */
-.gradio-container .sources-panel-card::-webkit-scrollbar {
-    display: block !important;
-    -webkit-appearance: none !important;
-    width: 14px !important;
-    height: 14px !important;
-}
-.gradio-container .sources-panel-card::-webkit-scrollbar-track {
-    background: #c9dff0 !important;
-    border-radius: 10px !important;
-    border: 2px solid #e8f2fc !important;
-    margin: 6px 2px !important;
-}
-.gradio-container .sources-panel-card::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #4a9fd4 0%, #1f6eb8 40%, #004a99 100%) !important;
-    border-radius: 10px !important;
-    border: 2px solid #c9dff0 !important;
-    min-height: 48px !important;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.25) !important;
-}
-.gradio-container .sources-panel-card::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #1f6eb8 0%, #003a7a 100%) !important;
-}
-
-.sources-empty {
-    color: var(--ink-muted);
-    font-size: 0.88rem;
-    padding: 0.5rem 0;
-}
-
-.sources-panel-card a,
-.sources-list a { color: var(--blue-600) !important; }
-
-/* Source cards rendered in markdown */
-.src-card {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 0.3rem !important;
-    padding: 0.72rem 0.85rem !important;
-    margin-bottom: 0.55rem !important;
-    background: var(--surface) !important;
-    border: 1px solid var(--border) !important;
-    border-left: 3px solid var(--blue-500) !important;
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0 !important;
-    box-shadow: var(--shadow-sm) !important;
-    transition: box-shadow .15s !important;
-}
-.src-card:hover { box-shadow: var(--shadow-md) !important; }
-.src-card-title {
-    font-weight: 700 !important;
-    color: var(--blue-800) !important;
-    font-size: 0.88rem !important;
-    word-break: break-word !important;
-}
-.src-card-meta {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 0.35rem !important;
-    font-size: 0.76rem !important;
-    color: var(--ink-muted) !important;
-}
-.src-badge {
-    display: inline-flex !important;
-    align-items: center !important;
-    padding: 0.1rem 0.5rem !important;
-    border-radius: 99px !important;
-    font-weight: 600 !important;
-    font-size: 0.72rem !important;
-    letter-spacing: .02em !important;
-}
-.src-badge-pdf   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-.src-badge-audio { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-.src-badge-image { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
-.src-badge-video { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
-.src-badge-other { background: var(--blue-50); color: var(--blue-600); border: 1px solid var(--blue-100); }
-.src-badge-ppt   { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
-
-.src-lang-pill {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 0.15rem !important;
-    padding: 0.12rem 0.45rem !important;
-    border-radius: 99px !important;
-    background: var(--blue-50) !important;
-    border: 1px solid var(--blue-100) !important;
-    color: var(--ink-muted) !important;
-    font-size: 0.7rem !important;
-    font-weight: 600 !important;
-    white-space: nowrap !important;
-}
-
-/* Clickable file name link */
-.src-file-link {
-    color: var(--blue-600) !important;
-    text-decoration: none !important;
-    transition: all .15s ease !important;
-}
-.src-file-link:hover {
-    color: var(--blue-700) !important;
-    text-decoration: underline !important;
-}
-
-/* ── Accordion ── */
-.gradio-container .rag-accordion {
-    background: var(--surface) !important;
-    border: 1.5px solid var(--border) !important;
-    border-radius: var(--radius-md) !important;
-    overflow: visible !important;
-    box-shadow: var(--shadow-sm) !important;
-    margin-top: 0.5rem !important;
-}
-.gradio-container .rag-accordion .label-wrap {
-    color: var(--blue-800) !important;
-    font-weight: 700 !important;
-    padding: 0.9rem 1.1rem !important;
-    background: linear-gradient(90deg, var(--blue-50) 0%, var(--surface) 100%) !important;
-    border-radius: calc(var(--radius-md) - 2px) !important;
-    width: 100% !important;
-    font-size: 0.9rem !important;
-    letter-spacing: .01em !important;
-}
-.gradio-container .rag-accordion .label-wrap .icon { color: var(--blue-600) !important; opacity: 1 !important; }
-.gradio-container .rag-accordion table,
-.gradio-container .rag-accordion th,
-.gradio-container .rag-accordion td {
-    color: var(--ink) !important;
-    background: var(--surface) !important;
-    border-color: var(--border) !important;
-}
-.gradio-container .rag-accordion tbody tr:hover td {
-    background: var(--blue-50) !important;
-    cursor: pointer !important;
-}
-.gradio-container .rag-accordion .label-wrap + div { padding: 0 0.5rem 0.75rem !important; }
-
-/* ── Details / summary ── */
-.gradio-container details {
-    background: var(--surface) !important;
-    border: 1px solid var(--border-2) !important;
-    border-radius: var(--radius-md) !important;
-    overflow: hidden;
-    box-shadow: var(--shadow-sm) !important;
-}
-.gradio-container details > summary {
-    color: var(--blue-800) !important;
-    font-weight: 600 !important;
-    padding: 0.75rem 1rem !important;
-    background: linear-gradient(90deg, var(--blue-50) 0%, var(--surface) 100%) !important;
-}
-.gradio-container details[open] > summary { border-bottom: 1px solid var(--border) !important; }
-
-/* ── Section heading chips ── */
-.section-chip {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 0.35rem !important;
-    padding: 0.22rem 0.7rem !important;
-    border-radius: 99px !important;
-    background: var(--blue-50) !important;
-    border: 1px solid var(--blue-100) !important;
-    color: var(--blue-600) !important;
-    font-size: 0.75rem !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-    letter-spacing: .04em !important;
-    margin-bottom: 0.5rem !important;
-}
-
-/* ── Divider ── */
-.rag-divider {
-    border: none !important;
-    border-top: 1px solid var(--border) !important;
-    margin: 1.25rem 0 !important;
-}
-
-/* ── Footer ── */
-.footer {
-    text-align: center !important;
-    color: var(--ink-muted) !important;
-    padding: 1.2rem 1rem 0.5rem !important;
-    font-size: 0.79rem !important;
-    border-top: 1px solid var(--border) !important;
-    margin: 1rem 1.5rem 0 !important;
-    letter-spacing: .01em !important;
-}
-.footer-logo {
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 0.4rem !important;
-    font-weight: 700 !important;
-    color: var(--blue-600) !important;
-    margin-bottom: 0.2rem !important;
-}
-.footer-sub { color: var(--ink-muted) !important; opacity: .8 !important; }
-
-/* ── Loading card ── */
-@keyframes rag-premium-spin { to { transform: rotate(360deg); } }
-
-.rag-premium-load {
-    display: flex !important;
-    align-items: center !important;
-    gap: 1rem !important;
-    padding: 1.4rem 1.3rem !important;
-    background: linear-gradient(135deg, var(--surface) 0%, var(--blue-50) 100%) !important;
-    border: 1.5px solid var(--border) !important;
-    border-radius: var(--radius-md) !important;
-    box-shadow: var(--shadow-md) !important;
-}
-.rag-premium-spin {
-    width: 40px !important;
-    height: 40px !important;
-    flex-shrink: 0 !important;
-    border-radius: 50% !important;
-    border: 3px solid var(--blue-100) !important;
-    border-top-color: var(--blue-600) !important;
-    border-right-color: var(--blue-500) !important;
-    animation: rag-premium-spin 0.68s linear infinite !important;
-}
-.rag-premium-load-text { display: flex !important; flex-direction: column !important; gap: 0.12rem !important; }
-.rag-premium-load-title { font-weight: 700 !important; font-size: 1.02rem !important; color: var(--blue-800) !important; }
-.rag-premium-load-hint  { font-size: 0.88rem !important; color: var(--ink-muted) !important; line-height: 1.45 !important; }
-
-.progress-bar-wrap,
-.generating { border-radius: 8px !important; }
-
-/* ============================================================
-   RESPONSIVE — Tablet  (641 px – 1024 px)
-   ============================================================ */
-@media (max-width: 1024px) {
-    .top-nav-bar   { padding: 0.6rem 1.25rem; }
-    .top-nav-home  { font-size: 0.84rem; padding: 0.3rem 0.75rem; }
-    .top-nav-brand { font-size: 0.84rem; }
-
-    .header-section {
-        margin: 0.6rem 1rem 1.1rem !important;
-        padding: 1.1rem 1.5rem 1rem !important;
-    }
-    .hero-title        { font-size: 1.35rem !important; }
-    .header-section h1 { font-size: 1.35rem !important; }
-    .search-card  { margin: 0 1rem 0.9rem !important; padding: 1rem 1.1rem !important; }
-    .toolbar-row  { margin: 0 1rem 1rem !important; padding: 0.7rem 1rem !important; }
-    .content-row,
-    .side-inset   { margin-left: 1rem !important; margin-right: 1rem !important; }
-    .footer       { margin: 0.9rem 1rem 0 !important; }
-}
-
-/* ============================================================
-   RESPONSIVE — Mobile  (≤ 640 px)
-   ============================================================ */
-@media (max-width: 640px) {
-
-    /* Nav bar — mobile */
-    .top-nav-bar {
-        padding: 0.5rem 0.9rem;
-        gap: 0.4rem;
-    }
-    .top-nav-home {
-        font-size: 0.78rem;
-        padding: 0.28rem 0.65rem;
-        border-radius: 7px;
-    }
-    .top-nav-brand { font-size: 0.76rem; }
-
-    /* Hero */
-    .header-section {
-        margin: 0.4rem 0.6rem 0.85rem !important;
-        padding: 1rem 0.9rem 0.95rem !important;
-        border-radius: var(--radius-md) !important;
-    }
-    .hero-title        { font-size: 1.15rem !important; letter-spacing: -0.01em !important; }
-    .hero-desc         { font-size: 0.82rem !important; }
-    .header-section h1 { font-size: 1.15rem !important; }
-    .header-section p  { font-size: 0.82rem !important; }
-    .header-badges     { gap: 0.3rem !important; margin-top: 0.75rem !important; }
-    .hbadge            { font-size: 0.7rem !important; padding: 0.2rem 0.5rem !important; }
-    .hero-home-link    { font-size: 0.75rem !important; padding: 0.25rem 0.6rem !important; }
-
-    /* Search card */
-    .search-card {
-        margin: 0 0.6rem 0.75rem !important;
-        padding: 0.85rem 0.85rem !important;
-        border-radius: var(--radius-sm) !important;
-    }
-
-    /* Search buttons — full-width stack */
-    .gradio-container button.primary,
-    .gradio-container .lg.primary,
-    .gradio-container button.secondary {
-        width: 100% !important;
-        min-width: 0 !important;
-    }
-
-    /* Toolbar — stack dropdown above radio */
-    .toolbar-row {
-        margin: 0 0.6rem 0.75rem !important;
-        padding: 0.7rem 0.85rem !important;
-        flex-direction: column !important;
-        align-items: stretch !important;
-        gap: 0.7rem !important;
-    }
-
-    /* Radio — wrap tightly */
-    .gradio-container .radio-group { flex-wrap: wrap !important; gap: 0.3rem !important; }
-    .gradio-container .radio-group label {
-        flex: 0 0 auto !important;
-        font-size: 0.78rem !important;
-    }
-
-    /* Content — stack answer above sources */
-    .content-row {
-        flex-direction: column !important;
-        margin-left: 0.6rem !important;
-        margin-right: 0.6rem !important;
-    }
-    .content-row > * { width: 100% !important; min-width: 0 !important; flex: none !important; }
-
-    .answer-panel-card {
-        padding: 1rem 0.85rem 1rem 1rem !important;
-        min-height: 150px !important;
-        border-radius: var(--radius-sm) !important;
-        max-height: min(360px, 50vh) !important;
-    }
-    .gradio-container .answer-panel-card::-webkit-scrollbar {
-        width: 12px !important;
-    }
-    .sources-panel-card {
-        border-radius: var(--radius-sm) !important;
-        padding: 0.85rem 0.75rem 1rem 0.85rem !important;
-        margin-top: 0 !important;
-        max-height: min(360px, 50vh) !important;
-    }
-    .gradio-container .sources-panel-card::-webkit-scrollbar {
-        width: 12px !important;
-    }
-
-    .side-inset { margin-left: 0.6rem !important; margin-right: 0.6rem !important; }
-    .footer     { margin: 0.8rem 0.6rem 0 !important; font-size: 0.73rem !important; }
-
-    .gradio-container textarea { font-size: 0.94rem !important; }
-}
-"""
-
-
-def create_app():
-    """Build the Gradio application."""
-    _theme = gr.themes.Soft(
-        primary_hue=gr.themes.colors.blue,
-        secondary_hue=gr.themes.colors.blue,
-        neutral_hue=gr.themes.colors.slate,
-        font=[gr.themes.GoogleFont("Source Sans 3"), "Inter", "ui-sans-serif", "sans-serif"],
-        radius_size=gr.themes.sizes.radius_lg,
+    _last_lang_code = (lang_code or DEFAULT_LANG_CODE).upper()
+    yield _sse_payload(LOADING_LANGUAGE)
+    answer = generate_answer(
+        _last_query, _last_docs, language_pref=_language_name(_last_lang_code)
     )
-    try:
-        _theme = _theme.set(
-            body_background_fill="#eef4fc",
-            block_background_fill="#ffffff",
-            block_border_color="#d0dff0",
-            block_title_text_color="#082f4d",
-            block_label_text_color="#082f4d",
-            input_background_fill="#ffffff",
-            button_primary_background_fill="#004a99",
-            button_primary_text_color="#ffffff",
+    yield _sse_payload(markdown_to_html(answer))
+
+
+def mount_rag_ui(fastapi_app: FastAPI, path: str = "/rag") -> None:
+    base = path.rstrip("/") or "/rag"
+    router = APIRouter(prefix=base, tags=["rag"])
+
+    @router.get("", response_class=HTMLResponse, include_in_schema=False)
+    @router.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def rag_page():
+        html = _TEMPLATE_PATH.read_text(encoding="utf-8")
+        html = html.replace("{{GSDP_HOME_URL}}", GSDP_HOME_URL)
+        html = html.replace("{{BASE_PATH}}", base)
+        return HTMLResponse(html)
+
+    @router.post("/api/query", include_in_schema=False)
+    def rag_query(body: QueryRequest):
+        def stream():
+            for chunk in _chat_events(body.query, body.media_filter, body.lang_code):
+                yield chunk
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
+    @router.post("/api/language", include_in_schema=False)
+    def rag_language(body: LanguageRequest):
+        def stream():
+            for chunk in _language_events(body.lang_code):
+                yield chunk
+
+        return StreamingResponse(stream(), media_type="text/event-stream")
+
+    fastapi_app.include_router(router)
+    static_mount = f"{base}/static"
+    if not any(getattr(r, "path", None) == static_mount for r in fastapi_app.routes):
+        fastapi_app.mount(
+            static_mount,
+            StaticFiles(directory=str(_STATIC_DIR)),
+            name="rag_static",
         )
-    except (TypeError, AttributeError):
-        pass
-
-    with gr.Blocks(
-        css=CUSTOM_CSS,
-        title="GSDP Semantic Search",
-        theme=_theme,
-    ) as app:
-
-
-
-        # ── Hero header ─────────────────────────────────────
-        with gr.Column(elem_classes="header-section"):
-            gr.HTML(
-                f"<div class='hero-inner'>"
-                f"<div class='hero-home-row'>"
-                f"<a href='{GSDP_HOME_URL}' class='hero-home-link'>&#8592; Home</a>"
-                f"</div>"
-                f"<h1 class='hero-title'>Global Salesian Digital Platform Semantic Search</h1>"
-                f"<p class='hero-desc'>AI-powered search and Q&amp;A over the Salesian multilingual knowledge base &mdash; "
-                f"PDFs, audio recordings, images, and video content across five languages.</p>"
-                f"<div class='header-badges'>"
-                f"<span class='hbadge'>&#128196; PDF Documents</span>"
-                f"<span class='hbadge'>&#127911; Audio</span>"
-                f"<span class='hbadge'>&#128444;&#65039; Images</span>"
-                f"<span class='hbadge'>&#127909; Video</span>"
-                f"<span class='hbadge'>&#127760; 5 Languages</span>"
-                f"</div>"
-                f"</div>"
-            )
-   
-
-        # ── Search card ─────────────────────────────────────
-        with gr.Column(elem_classes="search-card"):
-            query_input = gr.Textbox(
-                placeholder="\U0001F50E  Ask anything — e.g., What is the Preventive System methodology?",
-                label="Your question",
-                lines=2,
-                max_lines=5,
-            )
-            with gr.Row():
-                submit_btn = gr.Button(
-                    "\u2728  Search & Analyze",
-                    variant="primary",
-                    elem_classes="primary-btn",
-                    scale=3,
-                )
-                clear_btn = gr.Button("\u2715  Clear", variant="secondary", scale=1)
-
-        # ── Toolbar: media filter + language ────────────────
-        with gr.Row(elem_classes="toolbar-row"):
-            media_filter = gr.Dropdown(
-                choices=["All", "PDF", "Audio", "Image", "Video"],
-                value="All",
-                label="Filter by media type",
-                scale=1,
-            )
-            lang_radio = gr.Radio(
-                choices=[
-                    "\U0001F1EC\U0001F1E7 English",
-                    "\U0001F1EA\U0001F1F8 Espa\u00f1ol",
-                    "\U0001F1EB\U0001F1F7 Fran\u00e7ais",
-                    "\U0001F1EE\U0001F1F9 Italiano",
-                    "\U0001F1E7\U0001F1F7 Portugu\u00eas",
-                ],
-                value="\U0001F1EC\U0001F1E7 English",
-                label="Response language",
-                interactive=True,
-                scale=3,
-            )
-
-        # ── Content: answer + sources ────────────────────────
-        with gr.Row(elem_classes="content-row"):
-            with gr.Column(scale=3, elem_classes="answer-column"):
-                gr.Markdown(
-                    "<div class='section-chip'>\U0001F4AC Answer</div>",
-                    sanitize_html=False,
-                )
-                with gr.Column(elem_classes="answer-panel-card"):
-                    answer_output = gr.Markdown(
-                        value=(
-                            "<div style='color:#4a6b8c;font-size:.95rem;padding:.25rem 0;'>"
-                            "Ask a question above to explore the knowledge base\u2026"
-                            "</div>"
-                        ),
-                        label="",
-                        elem_classes="answer-content",
-                        sanitize_html=False,
-                    )
-
-            with gr.Column(scale=1, elem_classes="sources-column"):
-                gr.Markdown(
-                    "<div class='section-chip'>\U0001F4DA Retrieved Sources</div>",
-                    sanitize_html=False,
-                )
-                with gr.Column(elem_classes="sources-panel-card"):
-                    sources_output = gr.Markdown(
-                        value=(
-                            "<div class='sources-empty'>"
-                            "Sources will appear here after your query\u2026"
-                            "</div>"
-                        ),
-                        elem_classes="sources-list",
-                        sanitize_html=False,
-                    )
-
-        # ── Example questions accordion ──────────────────────
-        # with gr.Accordion(
-        #     "\U0001F4A1  Example questions — click any to get started",
-        #     open=True,
-        #     elem_classes=["rag-accordion", "side-inset"],
-        # ):
-        #     gr.Examples(
-        #         examples=[[q] for q in EXAMPLE_QUERIES],
-        #         inputs=query_input,
-        #         label="",
-        #     )
-
-        # ── Footer ──────────────────────────────────────────
-        gr.Markdown(
-            "<div class='footer'>"
-            "<div class='footer-logo'>\U0001F30D&nbsp; Global Salesian Digital Platform Semantic Search</div>"
-            "<div class='footer-sub'>"
-            "Powered by <strong>Bosco Soft Technologies Pvt Ltd</strong> &nbsp;&middot;&nbsp; "
-            "Multilingual Salesian Knowledge Corpus &nbsp;&middot;&nbsp; "
-            "</div>"
-            "</div>",
-            sanitize_html=False,
-        )
-
-        # ── Event wiring ────────────────────────────────────
-        submit_btn.click(
-            fn=chat,
-            inputs=[query_input, media_filter],
-            outputs=[answer_output, sources_output],
-            show_progress="hidden",
-        )
-        query_input.submit(
-            fn=chat,
-            inputs=[query_input, media_filter],
-            outputs=[answer_output, sources_output],
-            show_progress="hidden",
-        )
-        lang_radio.change(
-            fn=switch_language,
-            inputs=[lang_radio],
-            outputs=[answer_output],
-            show_progress="hidden",
-        )
-        clear_btn.click(
-            fn=lambda: (
-                "",
-                "<div style='color:#4a6b8c;font-size:.95rem;padding:.25rem 0;'>"
-                "Ask a question above to explore the knowledge base\u2026</div>",
-                "<div class='sources-empty'>"
-                "Sources will appear here after your query\u2026</div>",
-            ),
-            outputs=[query_input, answer_output, sources_output],
-        )
-
-    app.show_api = False
-    return app
 
 
 def mount_rag_gradio(fastapi_app: FastAPI, path: str = "/rag") -> None:
-    """Wire the RAG Gradio UI onto the main FastAPI app.
-
-    Call this once from ``main.py`` when the API starts.
-    """
-    gr.mount_gradio_app(fastapi_app, create_app(), path=path)
-
-
-# ============================================================
-# STANDALONE LAUNCH
-# ============================================================
-# if __name__ == "__main__":
-#     # Launch Gradio app directly when run as standalone script
-#     # For Databricks Apps, use port 8080
-#     port = int(os.environ.get("PORT", 8080))
-#     print(f"Starting GSDP Semantic Search on port {port}...")
-#     app = create_app()
-#     app.launch(
-#         server_name="0.0.0.0",
-#         server_port=port,
-#         share=False
-#     )
+    mount_rag_ui(fastapi_app, path=path)

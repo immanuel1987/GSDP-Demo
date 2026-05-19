@@ -1,1 +1,1 @@
-"""Salesian Online RAG (Gradio) mounted on the main FastAPI app."""
+"""Salesian Online RAG UI (HTML) mounted on the main FastAPI app."""

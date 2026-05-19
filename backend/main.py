@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes import auth
 from routes import ontology
-from salesianonline_rag.app import mount_rag_gradio
+from salesianonline_rag.app import mount_rag_ui
 
 
 
@@ -15,7 +15,7 @@ from salesianonline_rag.app import mount_rag_gradio
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # RAG is mounted below; this hook confirms the module ran with the API process.
-    print("[startup] Salesian Online RAG UI mounted at /rag (same host/port as this API).")
+    print("[startup] Salesian Online RAG UI (HTML) at /rag")
     yield
 
 
@@ -44,8 +44,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(ontology.router)
 
-# Loads ``salesianonline_rag/rag_gradio.py`` and mounts Gradio when you start ``main:app`` only.
-mount_rag_gradio(app, path="/rag")
+mount_rag_ui(app, path="/rag")
 
 
 @app.get("/")
