@@ -18,7 +18,7 @@ from fastapi import FastAPI
 # CONFIGURATION
 # ============================================================
 ENDPOINT_NAME = os.environ.get("VECTOR_SEARCH_ENDPOINT", "multimodal_endpoint")
-INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "salesianonline.gold.vector_content_new_index")
+INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "salesianonline.gold.vector_content_test_index")
 LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
 # Browser "Home" from the RAG UI (e.g. frontend URL or "/"). Defaults to site root on the same origin.
 GSDP_HOME_URL = os.environ.get("GSDP_HOME_URL", "https://gsdp-dev.cristoerp.com/")
@@ -129,7 +129,7 @@ def retrieve_context(query, media_filter="All"):
 
         search_kwargs = {
             "query_text": query,
-            "columns": ["title", "file_format", "language", "url", "content_text"],
+            "columns": ["title", "file_format", "languages", "url", "content_text"],
             "num_results": 20
         }
         if media_filter and media_filter != "All":
@@ -1378,7 +1378,7 @@ def create_app():
             outputs=[query_input, answer_output, sources_output],
         )
 
-    app.show_api = True
+    app.show_api = False
     return app
 
 
