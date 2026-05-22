@@ -1518,7 +1518,6 @@ def create_app():
                         value=_ANSWER_PLACEHOLDER,
                         show_label=False,
                         elem_classes="answer-panel-card",
-                        container=False,
                     )
                 with gr.Column(scale=1, elem_classes="sources-column", min_width=260):
                     gr.Markdown(
@@ -1529,7 +1528,6 @@ def create_app():
                         value=_SOURCES_PLACEHOLDER,
                         show_label=False,
                         elem_classes="sources-panel-card",
-                        container=False,
                     )
 
         gr.Markdown(
