@@ -37,5 +37,5 @@ networks:
   n8n-docker_web:
     name: n8n-docker_web
     # Set to true on the server where Traefik/n8n already created this network.
-    external: ${DOCKER_EXTERNAL_NETWORK:-false}
+    external: true
 

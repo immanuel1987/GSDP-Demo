@@ -1,35 +1,32 @@
-FROM python:3.11-slim
+FROM python:3.11
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    pkg-config \
-    cargo \
-    rustc \
-    libpq-dev \
-    libffi-dev \
-    libssl-dev \
-    libxml2-dev \
-    libxslt-dev \
-    zlib1g-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN pip install --upgrade pip setuptools wheel
-
-COPY requirements.txt .
-
-RUN pip install --no-deps -r requirements.txt
-
 COPY . .
 
-EXPOSE 2005
+RUN pip install --upgrade pip
 
-HEALTHCHECK CMD curl --fail http://localhost:2005/health || exit 1
+RUN pip install \
+fastapi==0.115.0 \
+uvicorn==0.30.0 \
+gradio==4.31.4 \
+huggingface_hub==0.23.5 \
+numpy==1.26.4 \
+pandas==2.2.2 \
+MarkupSafe==2.1.5 \
+jinja2==3.1.4 \
+openai \
+sqlalchemy \
+psycopg2-binary \
+python-dotenv \
+requests \
+databricks-vectorsearch \
+bcrypt==5.0.0 \
+databricks-sql-connector
+
+EXPOSE 2005
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "2005"]
