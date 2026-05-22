@@ -1,56 +1,94 @@
 """ 
-GSDP Semantic Search — RAG assistant over multilingual educational content
-(PDFs, audio, images, video).
+Salesian Online - RAG Knowledge Assistant
+A professional Databricks App for semantic search and Q&A
+over multilingual educational content (PDFs, Audio, Images, Video).
 
-This module can be loaded by ``backend/main.py`` (``mount_rag_ui``) or 
-run standalone with ``python app.py``.
+Search Flow:
+1. First perform exact keyword matching against ALL indexed columns (Tier 1)
+2. Return all directly matched records from the table
+3. If no relevant match exists, trigger deep semantic/vector search (Tier 2)
+4. Avoid returning unrelated documents during the initial table search
+5. Prioritize exact matches over semantic similarity results
+
+Column Mapping (testing.gold.vector_content_index):
+- title: document title (unique, searchable)
+- abstract: clean document text (unique, primary content field)
+- contributor: author/contributor ID (cleaned for matching)
+- country: geographic location (searchable)
+- inferred_continent: continent (searchable)
+- language: document language (searchable, structured query)
+- knowledge_area: academic area (searchable)
+- work_type: document type (searchable)
+- salesian_family_group: family group (searchable)
+- file_name: filename (searchable)
+- publication_year: year published (structured query)
+- content_classification: EXCLUDED from keyword matching (boilerplate taxonomy)
+- subject: EXCLUDED from keyword matching (structured resource IDs)
+- vector_search_text: embedding source (used for year metadata extraction only)
 """
 
-import html
-import json
 import os
-import re
 import sys
 import traceback
-from pathlib import Path
-from fastapi import APIRouter, FastAPI
-from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
-from markdown_it import MarkdownIt
-from pydantic import BaseModel
+import re
+import requests as http_requests
+import gradio as gr
+from fastapi import FastAPI
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
-ENDPOINT_NAME = os.environ.get("VECTOR_SEARCH_ENDPOINT", "multimodal_endpoint")
-INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "salesianonline.gold.vector_content_test_index")
+ENDPOINT_NAME = os.environ.get("VECTOR_SEARCH_ENDPOINT", "salesianonline_vs_endpoint")
+INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "testing.gold.vector_content_index")
 LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
-# Browser "Home" from the RAG UI (e.g. frontend URL or "/"). Defaults to site root on the same origin.
+
+# Minimum similarity score threshold (0 to 1).
+SIMILARITY_THRESHOLD = float(os.environ.get("SIMILARITY_THRESHOLD", "0.45"))
+
 GSDP_HOME_URL = os.environ.get("GSDP_HOME_URL", "https://gsdp-dev.cristoerp.com/")
 
-# Get Databricks credentials from environment or use defaults
-# In Databricks Apps, these are automatically provided
-_host = os.environ.get("DATABRICKS_SERVER_HOSTNAME", "https://dbc-f99975de-9224.cloud.databricks.com")
-# Ensure the host has https:// scheme
-if not _host.startswith("http://") and not _host.startswith("https://"):
-    DATABRICKS_HOST = f"https://{_host}"
-else:
-    DATABRICKS_HOST = _host
+# All columns to fetch from the vector search index
+FETCH_COLUMNS = [
+    "file_name", "title", "work_type", "language",
+    "content_classification", "vector_search_text",
+    "subject", "knowledge_area", "contributor", "url",
+    "publication_year", "abstract", "country",
+    "inferred_continent", "salesian_family_group"
+]
 
-DATABRICKS_TOKEN = os.environ.get("DATABRICKS_ACCESS_TOKEN", "dapia5554ab24c1fa7f53da24f14fb0d7620")
+
+def ensure_https(url):
+    if not url:
+        return url
+    url = url.strip()
+    if not url.startswith("https://") and not url.startswith("http://"):
+        url = f"https://{url}"
+    return url.rstrip("/")
 
 
 # ============================================================
 # AUTHENTICATION
 # ============================================================
 def get_host():
-    """Return the Databricks host with proper URL scheme."""
-    return DATABRICKS_HOST
+    host = os.environ.get("DATABRICKS_HOST", "https://adb-7405609771152190.10.azuredatabricks.net/")
+    print("Test the host",host)
+    return ensure_https(host)
 
 
-def get_token():
-    """Return the personal access token."""
-    return DATABRICKS_TOKEN
+def get_oauth_token():
+    host = get_host()
+    client_id = os.environ.get("DATABRICKS_CLIENT_ID", "e91a07b8-d63e-4c69-8a18-c06e02c7d72a")
+    client_secret = os.environ.get("DATABRICKS_CLIENT_SECRET", "doseb82d028e4092185863a5c4672e09a82c")
+    token_url = f"{host}/oidc/v1/token"
+    print("Test token url",token_url)
+    response = http_requests.post(
+        token_url,
+        data={"grant_type": "client_credentials", "client_id": client_id,
+              "client_secret": client_secret, "scope": "all-apis"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    response.raise_for_status()
+    return response.json()["access_token"]
 
 
 # ============================================================
@@ -62,20 +100,28 @@ def get_vsc():
     global _vsc
     if _vsc is None:
         from databricks.vector_search.client import VectorSearchClient
-        _vsc = VectorSearchClient(
-            workspace_url=DATABRICKS_HOST,
-            personal_access_token=DATABRICKS_TOKEN,
-            disable_notice=True
-        )
+        host = get_host()
+        client_id = os.environ.get("DATABRICKS_CLIENT_ID")
+        client_secret = os.environ.get("DATABRICKS_CLIENT_SECRET")
+        if client_id and client_secret:
+            _vsc = VectorSearchClient(
+                workspace_url=host,
+                service_principal_client_id=client_id,
+                service_principal_client_secret=client_secret,
+                disable_notice=True
+            )
+        else:
+            _vsc = VectorSearchClient(
+                workspace_url=host,
+                personal_access_token=get_oauth_token(),
+                disable_notice=True
+            )
     return _vsc
 
 
 def get_llm_client():
     from openai import OpenAI
-    return OpenAI(
-        api_key=DATABRICKS_TOKEN,
-        base_url=f"{DATABRICKS_HOST}/serving-endpoints"
-    )
+    return OpenAI(api_key=get_oauth_token(), base_url=f"{get_host()}/serving-endpoints")
 
 
 # ============================================================
@@ -83,39 +129,14 @@ def get_llm_client():
 # ============================================================
 MEDIA_ICONS = {
     "pdf": "\U0001F4C4",
-    "doc": "\U0001F4DD",
     "audio": "\U0001F3A7",
     "image": "\U0001F5BC\uFE0F",
     "video": "\U0001F3A5",
-    "ppt": "\U0001F4CA",
-    "sheet": "\U0001F4CA",
-    "other": "\U0001F4CE",
-}
-
-RETRIEVAL_TOP_K = 25
-RETRIEVAL_TOP_K_FILTERED = 60
-MAX_SOURCES_RETURNED = 20
-CONTENT_CHARS_PER_DOC = int(os.environ.get("RAG_CONTENT_CHARS", "4000"))
-MAX_ANSWER_TOKENS = int(os.environ.get("RAG_MAX_ANSWER_TOKENS", "2048"))
-
-# UI dropdown value -> normalized category (see _normalize_file_format)
-MEDIA_FILTER_CATEGORIES = {
-    "PDF": "pdf",
-    "Audio": "audio",
-    "Image": "image",
-    "Video": "video",
-    "Document": "doc",
-    "Presentation": "ppt",
-}
-
-# Possible raw file_format values in the index (server-side filter is best-effort)
-MEDIA_FILTER_SERVER_VALUES = {
-    "PDF": ["pdf", "PDF"],
-    "Audio": ["audio", "Audio", "AUDIO", "mp3", "wav", "ogg", "m4a", "mpeg"],
-    "Image": ["image", "Image", "IMAGE", "img", "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"],
-    "Video": ["video", "Video", "VIDEO", "mp4", "mov", "avi", "mkv", "webm"],
-    "Document": ["doc", "docx", "word", "document", "Document", "rtf", "odt"],
-    "Presentation": ["ppt", "pptx", "presentation", "Presentation", "odp"],
+    "thesis": "\U0001F393",
+    "article": "\U0001F4F0",
+    "book": "\U0001F4DA",
+    "report": "\U0001F4CB",
+    "regarding all": "\U0001F4DA"
 }
 
 LANGUAGE_FLAGS = {
@@ -124,6 +145,16 @@ LANGUAGE_FLAGS = {
     "FR": "\U0001F1EB\U0001F1F7",
     "IT": "\U0001F1EE\U0001F1F9",
     "POR": "\U0001F1E7\U0001F1F7",
+    "Portuguese": "\U0001F1E7\U0001F1F7",
+    "English": "\U0001F1EC\U0001F1E7",
+    "Spanish": "\U0001F1EA\U0001F1F8",
+    "French": "\U0001F1EB\U0001F1F7",
+    "Italian": "\U0001F1EE\U0001F1F9",
+    "En": "\U0001F1EC\U0001F1E7",
+    "Es": "\U0001F1EA\U0001F1F8",
+    "Fr": "\U0001F1EB\U0001F1F7",
+    "It": "\U0001F1EE\U0001F1F9",
+    "Por": "\U0001F1E7\U0001F1F7",
     "UNKNOWN": "\U0001F310"
 }
 
@@ -132,75 +163,534 @@ LANGUAGE_NAMES = {
     "ES": "Spanish",
     "FR": "French",
     "IT": "Italian",
-    "POR": "Portuguese"
+    "POR": "Portuguese",
+    "DE": "German"
 }
 
-LANGUAGE_NAME_TO_CODE = {
-    "english": "EN",
-    "spanish": "ES",
-    "french": "FR",
-    "italian": "IT",
-    "portuguese": "POR",
-    "por": "POR",
-    "en": "EN",
-    "es": "ES",
-    "fr": "FR",
-    "it": "IT",
+# Expand language abbreviations to full names for keyword matching
+# THIS IS THE SINGLE SOURCE OF TRUTH for supported languages.
+# Adding a new entry here auto-enables: code detection, keyword expansion, and filtering.
+LANGUAGE_EXPANSIONS = {
+    "en": "english",
+    "es": "spanish español",
+    "fr": "french français",
+    "it": "italian italiano",
+    "por": "portuguese português",
+    "de": "german deutsch"
 }
 
-DEFAULT_LANG_CODE = "EN"
-
-SOURCE_REF_LABELS = {
-    "EN": "Source",
-    "ES": "Fuente",
-    "FR": "Source",
-    "IT": "Fonte",
-    "POR": "Fonte",
+# Language query detection map (includes native language names for multilingual queries)
+LANGUAGE_QUERY_MAP = {
+    "english": "en", "italian": "it", "french": "fr",
+    "spanish": "es", "portuguese": "por",
+    # Italian names
+    "inglese": "en", "italiano": "it", "francese": "fr",
+    "spagnolo": "es", "portoghese": "por",
+    # French names
+    "anglais": "en", "italien": "it", "français": "fr",
+    "francais": "fr", "espagnol": "es", "portugais": "por",
+    # Spanish names
+    "inglés": "en", "ingles": "en", "italiano": "it",
+    "francés": "fr", "frances": "fr", "español": "es",
+    "espanol": "es", "portugués": "por", "portugues": "por",
+    # Portuguese names
+    "inglês": "en", "ingles": "en", "italiano": "it",
+    "francês": "fr", "frances": "fr", "espanhol": "es",
+    "português": "por", "portugues": "por",
+    # German names (test language - added dynamically)
+    "german": "de", "deutsch": "de", "tedesco": "de",
+    "allemand": "de", "alemán": "de", "aleman": "de", "alemão": "de"
 }
 
-OPEN_RESOURCE_LABELS = {
-    "EN": {
-        "pdf": "Open PDF", "doc": "Open document", "audio": "Open audio",
-        "image": "Open image", "video": "Open video", "ppt": "Open presentation",
-        "sheet": "Open spreadsheet", "other": "Open file",
-    },
-    "ES": {
-        "pdf": "Abrir PDF", "doc": "Abrir documento", "audio": "Abrir audio",
-        "image": "Abrir imagen", "video": "Abrir video", "ppt": "Abrir presentación",
-        "sheet": "Abrir hoja de cálculo", "other": "Abrir archivo",
-    },
-    "FR": {
-        "pdf": "Ouvrir le PDF", "doc": "Ouvrir le document", "audio": "Ouvrir l'audio",
-        "image": "Ouvrir l'image", "video": "Ouvrir la vidéo", "ppt": "Ouvrir la présentation",
-        "sheet": "Ouvrir la feuille de calcul", "other": "Ouvrir le fichier",
-    },
-    "IT": {
-        "pdf": "Apri PDF", "doc": "Apri documento", "audio": "Apri audio",
-        "image": "Apri immagine", "video": "Apri video", "ppt": "Apri presentazione",
-        "sheet": "Apri foglio di calcolo", "other": "Apri file",
-    },
-    "POR": {
-        "pdf": "Abrir PDF", "doc": "Abrir documento", "audio": "Abrir áudio",
-        "image": "Abrir imagem", "video": "Abrir vídeo", "ppt": "Abrir apresentação",
-        "sheet": "Abrir folha de cálculo", "other": "Abrir ficheiro",
-    },
+# Valid language codes - AUTO-DERIVED from LANGUAGE_EXPANSIONS (single source of truth).
+# To add a new language: just add its code + expansion to LANGUAGE_EXPANSIONS above.
+# Everything else (code detection, keyword expansion) will work automatically.
+VALID_LANG_CODES = set(LANGUAGE_EXPANSIONS.keys())
+
+# Context words that signal a language query (multilingual support)
+LANG_CONTEXT_WORDS = {"language", "lang", "lingua", "idioma", "langue", "idiome"}
+
+# Stop words to ignore during keyword validation
+STOP_WORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "need", "dare", "ought",
+    "to", "of", "in", "for", "on", "with", "at", "by", "from", "as",
+    "into", "through", "during", "before", "after", "above", "below",
+    "between", "under", "again", "further", "then", "once", "here",
+    "there", "when", "where", "why", "how", "all", "each", "every",
+    "both", "few", "more", "most", "other", "some", "such", "no",
+    "not", "only", "own", "same", "so", "than", "too", "very",
+    "just", "because", "and", "but", "or", "if", "while", "about",
+    "what", "which", "who", "whom", "this", "that", "these", "those",
+    "am", "it", "its", "i", "me", "my", "we", "our", "you", "your",
+    "he", "him", "his", "she", "her", "they", "them", "their",
+    "show", "list", "give", "find", "get", "tell", "display",
+    "documents", "document", "content", "available", "please",
+    "using", "information", "related", "reference", "references",
+    "out", "regarding"
 }
 
-REFERENCES_HEADINGS = {
-    "EN": "References",
-    "ES": "Referencias",
-    "FR": "Références",
-    "IT": "Riferimenti",
-    "POR": "Referências",
+# Intent words - describe what the user wants, not what they're searching for
+INTENT_WORDS = {
+    "year", "publication", "date", "published", "period", "time",
+    "methodology", "explain", "describe", "relationship", "overview",
+    "summary", "detail", "details", "meaning", "definition"
 }
 
-UI_SECTION_LABELS = {
-    "EN": {"sources": "Retrieved Sources", "answer": "Answer"},
-    "ES": {"sources": "Fuentes recuperadas", "answer": "Respuesta"},
-    "FR": {"sources": "Sources récupérées", "answer": "Réponse"},
-    "IT": {"sources": "Fonti recuperate", "answer": "Risposta"},
-    "POR": {"sources": "Fontes recuperadas", "answer": "Resposta"},
-}
+
+# ============================================================
+# COLUMN CLEANING UTILITIES
+# ============================================================
+def clean_contributor(raw_contributor):
+    """Clean structured contributor ID for human-readable matching.
+    Example: 'person_giovanni_bosco' → 'giovanni bosco'
+    """
+    if not raw_contributor:
+        return ""
+    # Remove common prefixes
+    cleaned = raw_contributor.lower()
+    cleaned = re.sub(r'^person_', '', cleaned)
+    # Replace underscores with spaces
+    cleaned = cleaned.replace('_', ' ')
+    return cleaned.strip()
+
+
+def extract_metadata_year(text, field_name):
+    """Extract a year value from a metadata field in vector_search_text."""
+    if not text:
+        return None
+    pattern = rf'{field_name}:\s*(\d{{4}})'
+    match = re.search(pattern, text)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def extract_bibliographical_citation(text):
+    """Extract bibliographical citation from vector_search_text, cleaned of publisher location.
+    
+    The vector_search_text contains embedded metadata including:
+    hasBibliographicalCitation: Salesian Historical Institute, Salesian Sources 1: Don Bosco
+    and his work. Collected Works, LAS - Kristu Jyoti, Rome - Bangalore, 2017, pages.
+    
+    Returns only the series/collection name (before ', LAS') to avoid false positives
+    from publisher location names like 'Rome' and 'Bangalore'.
+    """
+    if not text:
+        return ""
+    pattern = r'hasBibliographicalCitation:\s*(.+?)(?:\n|\r|$)'
+    match = re.search(pattern, text)
+    if not match:
+        return ""
+    citation = match.group(1).strip()
+    # Truncate at ", LAS" to remove publisher location boilerplate
+    # (e.g., "LAS - Kristu Jyoti, Rome - Bangalore, 2017, 1104-1114.")
+    las_idx = citation.find(", LAS")
+    if las_idx > 0:
+        citation = citation[:las_idx]
+    return citation
+
+
+# ============================================================
+# QUERY ANALYSIS
+# ============================================================
+def extract_year_ranges(query):
+    """Detect date ranges like '1860-1885' or '1860–1885' (en-dash) in query.
+    Returns list of (start_year, end_year) tuples.
+    """
+    range_pattern = r'(\d{4})\s*[\-–—]\s*(\d{4})'
+    ranges = []
+    for match in re.finditer(range_pattern, query):
+        start_yr = int(match.group(1))
+        end_yr = int(match.group(2))
+        if start_yr < end_yr:
+            ranges.append((start_yr, end_yr))
+    return ranges
+
+
+def extract_keywords(query):
+    """Extract meaningful keywords from a query by removing stop words and intent words.
+    Date ranges (e.g. '1860-1885') are handled separately, not as individual keywords.
+    """
+    # Remove date range patterns so individual years aren't extracted
+    range_pattern = r'\d{4}\s*[\-–—]\s*\d{4}'
+    query_without_ranges = re.sub(range_pattern, ' ', query)
+
+    words = re.findall(r'[a-zA-Z0-9]+', query_without_ranges.lower())
+    keywords = [w for w in words if w not in STOP_WORDS and len(w) > 2]
+
+    # If query contains a 4-digit year, filter out intent words
+    years = [w for w in keywords if w.isdigit() and len(w) == 4]
+    if years:
+        keywords = [w for w in keywords if w not in INTENT_WORDS]
+
+    return keywords
+
+
+def is_language_query(query, keywords):
+    """Detect if query is asking for documents in a specific language.
+    
+    Dynamic detection - works with ANY language code, known or unknown.
+    NO hardcoded regex patterns needed.
+    
+    Detection priority:
+    1. Full language names from LANGUAGE_QUERY_MAP (e.g., 'English', 'Francais', 'Italiano')
+    2. Known codes from VALID_LANG_CODES (auto-derived from LANGUAGE_EXPANSIONS):
+       - Short codes (2 chars): require a context word nearby
+       - Longer codes (3+ chars: por): accepted as standalone words
+       - Code alone as entire query: accepted
+    3. Unknown codes: when a context word (like "language") is present and
+       accompanied by a short alphabetic word (2-4 chars), treat as language query.
+       This ensures "language ta", "language zh", etc. correctly return 0 docs
+       instead of matching "language" as a content keyword.
+    
+    To add a new language: just add to LANGUAGE_EXPANSIONS (e.g., "de": "german deutsch").
+    VALID_LANG_CODES auto-updates, and code detection works immediately.
+    """
+    query_lower = query.lower()
+    query_words = query_lower.split()
+    
+    # 1. Check full language names (highest priority, unambiguous)
+    for lang_name, lang_code in LANGUAGE_QUERY_MAP.items():
+        if lang_name in query_lower:
+            return lang_code
+    
+    # 2. Check if any query word is a valid (known) language code
+    for word in query_words:
+        if word in VALID_LANG_CODES:
+            if len(word) >= 3:
+                # Longer codes (e.g., "por") are unambiguous - accept directly
+                return word
+            else:
+                # Short codes (en, it, fr, es, de): require a context word
+                if LANG_CONTEXT_WORDS.intersection(query_words):
+                    return word
+                # Or accept if the query is JUST the code alone
+                if len(query_words) == 1:
+                    return word
+    
+    # 3. Handle UNKNOWN codes: if a context word is present with a short
+    #    alphabetic word that looks like a language code (2-4 chars, all alpha),
+    #    treat it as a language query. This prevents "language ta" from matching
+    #    "language" as a content keyword and returning false positives.
+    if LANG_CONTEXT_WORDS.intersection(query_words):
+        for word in query_words:
+            if word in LANG_CONTEXT_WORDS:
+                continue
+            # Accept any short alphabetic word as a potential language code
+            if word.isalpha() and 2 <= len(word) <= 4 and word not in LANG_CONTEXT_WORDS:
+                return word  # Return the unknown code (will match 0 docs in filter)
+    
+    return None
+
+
+def is_publication_year_query(query, keywords):
+    """Detect if query is asking about publication year (e.g. '2017', 'year of publication: 2017')."""
+    years = [w for w in keywords if w.isdigit() and len(w) == 4 and int(w) >= 1900]
+    if years:
+        return years
+    return None
+
+
+def is_full_sentence_query(query, keywords):
+    """Detect if query is a natural language question (5+ words or contains '?')."""
+    if '?' in query:
+        return True
+    word_count = len(query.split())
+    return word_count >= 5 and len(keywords) >= 3
+
+
+# ============================================================
+# TOKEN-BASED MATCHING
+# ============================================================
+def tokenize(text):
+    """Extract alphanumeric tokens from text."""
+    return set(re.findall(r'[a-z0-9]+', text.lower()))
+
+
+def stem_token(token):
+    """Lightweight stemming: remove common suffixes."""
+    if len(token) <= 4:
+        return token
+    if token.endswith('ing') and len(token) > 5:
+        return token[:-3]
+    if token.endswith('tion') and len(token) > 6:
+        return token[:-4]
+    if token.endswith('ness') and len(token) > 6:
+        return token[:-4]
+    if token.endswith('ment') and len(token) > 6:
+        return token[:-4]
+    if token.endswith('es') and len(token) > 4:
+        return token[:-2]
+    if token.endswith('ed') and len(token) > 4:
+        return token[:-2]
+    if token.endswith('ly') and len(token) > 4:
+        return token[:-2]
+    if token.endswith('s') and not token.endswith('ss') and len(token) > 4:
+        return token[:-1]
+    return token
+
+
+def token_matches(keyword, tokens):
+    """Check if a keyword matches any token using stemming and prefix matching.
+    Avoids broad substring false positives (e.g. 'sale' matching 'salesians' only
+    if 'sale' is >= 4 chars and is a prefix or stem match).
+    """
+    keyword_stem = stem_token(keyword)
+
+    for token in tokens:
+        # Exact match
+        if keyword == token:
+            return True
+        # Stem match
+        if keyword_stem == stem_token(token):
+            return True
+        # Prefix match (keyword is prefix of token) - only for keywords >= 4 chars
+        if len(keyword) >= 4 and token.startswith(keyword):
+            return True
+        # Token is prefix of keyword
+        if len(token) >= 4 and keyword.startswith(token):
+            return True
+
+    return False
+
+
+# ============================================================
+# DOCUMENT BUILDING AND MATCHING
+# ============================================================
+def build_document(row):
+    """Build a document dict from a vector search result row.
+    
+    Uses ALL indexed columns:
+    Row indices (based on FETCH_COLUMNS order):
+      0: file_name, 1: title, 2: work_type, 3: language,
+      4: content_classification, 5: vector_search_text,
+      6: subject, 7: knowledge_area, 8: contributor, 9: url,
+      10: publication_year, 11: abstract, 12: country,
+      13: inferred_continent, 14: salesian_family_group
+    Last element: similarity score
+    """
+    raw_vector_text = row[5] or ""
+
+    # Extract metadata years from vector_search_text (has embedded year fields)
+    ref_start_year = extract_metadata_year(raw_vector_text, 'hasReferenceYearOfStartYear')
+    ref_end_year = extract_metadata_year(raw_vector_text, 'hasReferenceYearOfEndYear')
+
+    return {
+        "file_name": row[0] or "",
+        "title": row[1] or "",
+        "work_type": row[2] or "",
+        "language": row[3] or "",
+        "content_classification": row[4] or "",
+        "vector_search_text": raw_vector_text,
+        "subject": row[6] or "",
+        "knowledge_area": row[7] or "",
+        "contributor": row[8] or "",
+        "url": row[9] or "",
+        "publication_year": str(int(row[10])) if row[10] else "",
+        "abstract": row[11] or "",
+        "country": row[12] or "",
+        "inferred_continent": row[13] or "",
+        "salesian_family_group": row[14] or "",
+        "bibliographical_citation": extract_bibliographical_citation(raw_vector_text),
+        "ref_start_year": ref_start_year,
+        "ref_end_year": ref_end_year,
+        "score": row[-1] if row else 0
+    }
+
+
+def build_searchable_text(doc):
+    """Build searchable text from ALL relevant indexed columns.
+    
+    Includes:
+    - title: document title
+    - abstract: clean document content (primary content field)
+    - contributor: cleaned from structured ID (e.g. 'person_giovanni_bosco' → 'giovanni bosco')
+    - country: geographic location
+    - inferred_continent: continent
+    - knowledge_area: academic area
+    - work_type: document type
+    - language: with expansion to full language names
+    - salesian_family_group: family group
+    - file_name: may contain meaningful keywords
+    
+    Also includes:
+    - bibliographical_citation: extracted from vector_search_text (contains collection/series name)
+    
+    EXCLUDES:
+    - content_classification: boilerplate taxonomy (same for all docs, contains misleading names)
+    - subject: structured resource IDs (e.g. 'resource_11663.0'), not searchable text
+    - vector_search_text: raw embedding source with embedded metadata (use 'abstract' instead)
+    - url: not searchable content
+    """
+    lang_expanded = LANGUAGE_EXPANSIONS.get(doc.get("language", "").lower().strip(), "")
+    cleaned_contributor = clean_contributor(doc.get("contributor", ""))
+
+    searchable_parts = [
+        doc.get("title", ""),
+        doc.get("abstract", ""),             # Clean content from dedicated column
+        cleaned_contributor,                  # 'giovanni bosco' (cleaned from 'person_giovanni_bosco')
+        doc.get("country", ""),              # 'Italy'
+        doc.get("inferred_continent", ""),   # 'EuropeMiddleEast'
+        doc.get("knowledge_area", ""),       # 'Salesian Formation'
+        doc.get("work_type", ""),            # 'Regarding All'
+        doc.get("language", ""),             # 'En'
+        lang_expanded,                       # 'english'
+        doc.get("salesian_family_group", ""),# 'Relevant To All Carismatic Family'
+        doc.get("file_name", ""),            # PDF filename
+        doc.get("bibliographical_citation", ""),  # 'Salesian Sources 1: Don Bosco...' (collection/series)
+    ]
+
+    return " ".join(searchable_parts).lower()
+
+
+def document_matches_exact(doc, keywords, year_ranges, query):
+    """Tier 1: Exact keyword matching against ALL indexed columns.
+    
+    Matches keywords against all relevant columns in the table:
+    title, abstract, contributor (cleaned), country, inferred_continent,
+    knowledge_area, work_type, language, salesian_family_group, file_name.
+    
+    EXCLUDES: content_classification (boilerplate taxonomy), subject (resource IDs).
+    
+    For year ranges: checks if document's reference years overlap the range.
+    For publication years: matches ONLY against publication_year field.
+    For language queries: matches against document.language field.
+    """
+    # --- Language query handling ---
+    lang_code = is_language_query(query, keywords)
+    if lang_code:
+        doc_lang = doc.get("language", "").lower().strip()
+        if doc_lang != lang_code:
+            return False
+        # If query ONLY contains a language name (no other content keywords),
+        # return all docs in that language
+        # Remove language-related words from keywords to get content keywords
+        lang_words_to_remove = set()
+        for lang_name in LANGUAGE_QUERY_MAP:
+            lang_words_to_remove.update(lang_name.split())
+        lang_words_to_remove.update(["language", "lang", "lingua", "idioma", "langue"])
+        content_keywords = [k for k in keywords if k not in lang_words_to_remove]
+        if not content_keywords:
+            return True  # Pure language query → return all docs in that language
+        # Combined query: language + content → apply content keyword matching below
+        keywords = content_keywords
+
+    # --- Year range handling ---
+    if year_ranges:
+        for (start_yr, end_yr) in year_ranges:
+            range_matched = False
+
+            # Check reference year overlap
+            doc_start = doc.get("ref_start_year")
+            doc_end = doc.get("ref_end_year")
+            if doc_start and doc_end:
+                if doc_start <= end_yr and doc_end >= start_yr:
+                    range_matched = True
+            elif doc_start:
+                if start_yr <= doc_start <= end_yr:
+                    range_matched = True
+            elif doc_end:
+                if start_yr <= doc_end <= end_yr:
+                    range_matched = True
+
+            # Also check publication_year
+            pub_year = doc.get("publication_year", "")
+            if pub_year and pub_year.isdigit():
+                yr = int(pub_year)
+                if start_yr <= yr <= end_yr:
+                    range_matched = True
+
+            # Check for year mentions in abstract content
+            if not range_matched:
+                abstract_lower = doc.get("abstract", "").lower()
+                for yr in range(start_yr, end_yr + 1):
+                    if str(yr) in abstract_lower:
+                        range_matched = True
+                        break
+
+            if not range_matched:
+                return False
+
+    # --- Publication year query handling ---
+    pub_year_keywords = is_publication_year_query(query, keywords)
+    non_year_keywords = [k for k in keywords if not (k.isdigit() and len(k) == 4)]
+
+    if pub_year_keywords:
+        # Year keywords match ONLY against publication_year field
+        doc_pub_year = doc.get("publication_year", "")
+        for yr_kw in pub_year_keywords:
+            if yr_kw != doc_pub_year:
+                return False
+        keywords_to_check = non_year_keywords
+    else:
+        keywords_to_check = keywords
+
+    # --- Keyword matching against ALL indexed columns ---
+    searchable_text = build_searchable_text(doc)
+    tokens = tokenize(searchable_text)
+
+    # --- Full sentence query: relaxed matching ---
+    if is_full_sentence_query(query, keywords_to_check):
+        if not keywords_to_check:
+            return True
+        match_count = sum(1 for kw in keywords_to_check if token_matches(kw, tokens))
+        # Require at least 50% of keywords, minimum 2
+        required = max(2, len(keywords_to_check) // 2)
+        return match_count >= required
+
+    # --- Short/exact keyword queries: strict ALL-match ---
+    for keyword in keywords_to_check:
+        if len(keyword) <= 3:
+            if keyword not in tokens:
+                return False
+        else:
+            if not token_matches(keyword, tokens):
+                return False
+
+    return True
+
+
+def document_matches_semantic(doc, keywords, year_ranges, query):
+    """Tier 2: Relaxed semantic matching - only basic relevance check.
+    Used as fallback when Tier 1 (exact) returns nothing.
+    Returns True for any document above the similarity threshold with at least
+    partial keyword overlap across ALL columns.
+    """
+    if not keywords and not year_ranges:
+        return True
+
+    # For year ranges, still require range match
+    if year_ranges:
+        for (start_yr, end_yr) in year_ranges:
+            range_matched = False
+            doc_start = doc.get("ref_start_year")
+            doc_end = doc.get("ref_end_year")
+            if doc_start and doc_end:
+                if doc_start <= end_yr and doc_end >= start_yr:
+                    range_matched = True
+            pub_year = doc.get("publication_year", "")
+            if pub_year and pub_year.isdigit():
+                if start_yr <= int(pub_year) <= end_yr:
+                    range_matched = True
+            if not range_matched:
+                abstract_lower = doc.get("abstract", "").lower()
+                for yr in range(start_yr, end_yr + 1):
+                    if str(yr) in abstract_lower:
+                        range_matched = True
+                        break
+            if not range_matched:
+                return False
+
+    # For semantic tier, require at least ONE keyword match across all columns
+    if keywords:
+        searchable_text = build_searchable_text(doc)
+        tokens = tokenize(searchable_text)
+        match_count = sum(1 for kw in keywords if token_matches(kw, tokens))
+        return match_count >= 1
+
+    return True
 
 
 # ============================================================
@@ -208,151 +698,189 @@ UI_SECTION_LABELS = {
 # ============================================================
 _last_query = ""
 _last_docs = []
-_last_lang_code = DEFAULT_LANG_CODE
-_last_media_filter = "All"
-
-
-def _language_name(lang_code: str) -> str:
-    return LANGUAGE_NAMES.get((lang_code or DEFAULT_LANG_CODE).upper(), "English")
-
-
-def _matches_media_filter(file_format: str, media_filter: str) -> bool:
-    """Match UI media filter against index file_format using normalized categories."""
-    if not media_filter or media_filter == "All":
-        return True
-    category = MEDIA_FILTER_CATEGORIES.get(media_filter)
-    if not category:
-        return True
-    return _normalize_file_format(file_format) == category
-
-
-def _rows_to_documents(rows) -> list[dict]:
-    documents = []
-    for row in rows:
-        documents.append({
-            "file_name": row[0],
-            "file_format": row[1],
-            "language": row[2],
-            "url": row[3],
-            "content": (row[4] or "")[:CONTENT_CHARS_PER_DOC],
-        })
-    return documents
-
-
-def _filter_documents_by_media(documents: list[dict], media_filter: str) -> list[dict]:
-    if not media_filter or media_filter == "All":
-        return documents[:MAX_SOURCES_RETURNED]
-    filtered = [d for d in documents if _matches_media_filter(d.get("file_format", ""), media_filter)]
-    return filtered[:MAX_SOURCES_RETURNED]
 
 
 def retrieve_context(query, media_filter="All"):
-    """Retrieve relevant documents from Vector Search with reliable media-type filtering."""
+    """Two-tier retrieval pipeline matching against ALL indexed columns:
+    
+    Tier 1 (Exact Match): Check all indexed records for direct keyword matches
+           across ALL table columns. Returns all exactly matched documents.
+    
+    Tier 2 (Semantic Fallback): If no exact matches found, return semantically similar
+           documents that pass basic relevance checks.
+    
+    Column matching coverage:
+    - title, abstract, contributor (cleaned), country, inferred_continent
+    - knowledge_area, work_type, language, salesian_family_group, file_name
+    
+    This ensures no documents are missed when a keyword is present in ANY column.
+    """
     try:
         vsc = get_vsc()
         index = vsc.get_index(endpoint_name=ENDPOINT_NAME, index_name=INDEX_NAME)
 
-        use_filter = media_filter and media_filter != "All"
-        num_results = RETRIEVAL_TOP_K_FILTERED if use_filter else RETRIEVAL_TOP_K
+        search_kwargs = {
+            "query_text": query,
+            "columns": FETCH_COLUMNS,
+            "num_results": 1000
+        }
 
-        def _search(with_server_filter: bool) -> list[dict]:
-            search_kwargs = {
-                "query_text": query,
-                "columns": ["title", "file_format", "languages", "url", "content_text"],
-                "num_results": num_results,
-            }
-            if with_server_filter and use_filter:
-                server_values = MEDIA_FILTER_SERVER_VALUES.get(media_filter)
-                if server_values:
-                    search_kwargs["filters"] = {"file_format": server_values}
-            results = index.similarity_search(**search_kwargs)
-            rows = results.get("result", {}).get("data_array", [])
-            return _filter_documents_by_media(_rows_to_documents(rows), media_filter)
+        # Apply media type filter from dropdown
+        if media_filter and media_filter != "All":
+            search_kwargs["filters"] = {"work_type": media_filter.lower()}
 
-        documents = _search(with_server_filter=True)
-        if use_filter and len(documents) < 3:
-            documents = _search(with_server_filter=False)
+        results = index.similarity_search(**search_kwargs)
 
-        if use_filter and not documents:
-            return [{
-                "error": (
-                    f'No {media_filter} sources matched this query. '
-                    f'Try "All" or another media type.'
-                ),
-            }]
-        if not documents:
-            return [{"error": "No relevant sources found for this query."}]
-        return documents
+        # Extract keywords and year ranges from query
+        keywords = extract_keywords(query)
+        year_ranges = extract_year_ranges(query)
+
+        # For language and publication year queries, use a lower threshold since
+        # the structured field (language/publication_year) is the real discriminator,
+        # NOT vector similarity. A query like "2017" may score low on semantic
+        # similarity but the publication_year field match is what matters.
+        lang_code = is_language_query(query, keywords)
+        pub_year_keywords = is_publication_year_query(query, keywords)
+        if lang_code or pub_year_keywords or year_ranges:
+            effective_threshold = 0.01
+        else:
+            effective_threshold = SIMILARITY_THRESHOLD
+
+        # Build all candidate documents (above similarity threshold, with valid URL)
+        all_candidates = []
+        for row in results.get("result", {}).get("data_array", []):
+            score = row[-1] if row else 0
+            if score < effective_threshold:
+                continue
+            url = row[9] or ""
+            if not url.strip():
+                continue
+            doc = build_document(row)
+            all_candidates.append(doc)
+
+        # --- Tier 1: Exact keyword matching ---
+        # Check for exact title match first (highest priority)
+        normalized_query = re.sub(r'[^a-z0-9\s]', '', query.lower()).strip()
+        for doc in all_candidates:
+            normalized_title = re.sub(r'[^a-z0-9\s]', '', doc.get("title", "").lower()).strip()
+            if normalized_title and normalized_title == normalized_query:
+                return [doc]
+
+        # Exact keyword match against ALL indexed columns
+        exact_matches = []
+        for doc in all_candidates:
+            if document_matches_exact(doc, keywords, year_ranges, query):
+                exact_matches.append(doc)
+
+        if exact_matches:
+            exact_matches.sort(key=lambda d: d.get("score", 0), reverse=True)
+            return exact_matches
+
+        # For language queries, Tier 1 result is definitive - do NOT fall through
+        # to Tier 2 (which would match "french"/"italian" as content keywords)
+        if lang_code:
+            return []
+
+        # --- Tier 2: Semantic similarity fallback ---
+        # Only triggered if Tier 1 returns nothing
+        semantic_matches = []
+        for doc in all_candidates:
+            if document_matches_semantic(doc, keywords, year_ranges, query):
+                semantic_matches.append(doc)
+
+        if semantic_matches:
+            semantic_matches.sort(key=lambda d: d.get("score", 0), reverse=True)
+            return semantic_matches
+
+        # No matches at all
+        return []
+
     except Exception as e:
         print(f"[ERROR] Retrieval failed: {e}", file=sys.stderr)
         traceback.print_exc()
         return [{"error": str(e)}]
 
 
-def generate_answer(query, context_docs, language_pref="English", lang_code: str = DEFAULT_LANG_CODE):
-    """Generate answer using LLM with retrieved context."""
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    cite_label = SOURCE_REF_LABELS.get(code, "Source")
-    translate_source_titles(context_docs, code)
-
+def generate_answer(query, context_docs, language_pref="English"):
+    """Generate answer using LLM with retrieved context.
+    
+    The system prompt explicitly tells the LLM that documents were PRE-FILTERED
+    by the retrieval system, so the LLM should trust the results and not
+    second-guess the filtering logic.
+    """
     context_parts = []
     for i, doc in enumerate(context_docs, 1):
         if "error" in doc:
             continue
-        icon = MEDIA_ICONS.get(_normalize_file_format(doc.get("file_format", "")), "")
-        display_name = _source_display_name(doc, code)
+        icon = MEDIA_ICONS.get(doc.get("work_type", "").lower(), "")
+        title_display = doc.get("title") or doc.get("file_name") or "Unknown"
+        pub_year = doc.get("publication_year") or "N/A"
+        contributor = clean_contributor(doc.get("contributor", "")).title() or "N/A"
         context_parts.append(
-            f"--- [{i}] {icon} {display_name} "
-            f"(Type: {doc['file_format']}, Language: {doc['language']}) ---\n"
-            f"{doc['content']}"
-        )
+            f"--- Source {i}: {icon} {title_display} ---\n"
+            f"Type: {doc.get('work_type') or 'N/A'} | "
+            f"Language: {doc.get('language') or 'N/A'} | "
+            f"Publication Year: {pub_year} | "
+            f"Contributor: {contributor} | "
+            f"Country: {doc.get('country') or 'N/A'} | "
+            f"Knowledge Area: {doc.get('knowledge_area') or 'N/A'}\n"
+            f"Abstract: {doc.get('abstract', '')}")
     context_text = "\n\n".join(context_parts)
-    refs_heading = REFERENCES_HEADINGS.get(code, "References")
 
-    if not context_text.strip():
-        empty_msgs = {
-            "EN": "I could not find enough relevant content in the retrieved sources to answer this question.",
-            "ES": "No encontré suficiente contenido relevante en las fuentes recuperadas para responder a esta pregunta.",
-            "FR": "Je n'ai pas trouvé suffisamment de contenu pertinent dans les sources récupérées pour répondre à cette question.",
-            "IT": "Non ho trovato contenuti sufficienti nelle fonti recuperate per rispondere a questa domanda.",
-            "POR": "Não encontrei conteúdo relevante suficiente nas fontes recuperadas para responder a esta pergunta.",
-        }
-        return empty_msgs.get(code, empty_msgs["EN"])
+    # Determine query type for targeted instructions
+    query_lower = query.lower().strip()
+    is_year_query = bool(re.match(r'^\d{4}$', query_lower))
+    is_listing_query = any(w in query_lower for w in ["list", "show", "display", "give me", "all"])
 
     system_prompt = f"""You are a knowledgeable assistant for the Salesian Online educational platform.
-Your role is to answer questions about Salesian education content, which includes:
-- PDF documents (questionnaires, focus group guides, circulars)
-- Word documents and presentations
-- Audio recordings (interviews, lectures)
-- Images (logos, covers)
-- Videos (promotional and educational content)
+You answer questions about Salesian educational content based ONLY on the retrieved documents provided below.
 
-The content spans multiple languages: English, Spanish, French, Italian, and Portuguese.
+IMPORTANT CONTEXT:
+- The documents below have been PRE-FILTERED by a retrieval system that already matched them to the user's query.
+- ALL {len(context_docs)} documents shown are RELEVANT to the query. Do NOT say they are unrelated.
+- If the user searched a year (e.g., "2017"), all documents shown have that publication year — acknowledge this.
+- If the user searched a keyword, all documents shown contain that keyword in their content or metadata.
+- NEVER contradict the retrieval system by saying documents "don't match" or are "not related."
 
-Rules:
+RESPONSE FORMAT:
 1. Answer in {language_pref}.
-2. Base your answer ONLY on the provided context — synthesize across ALL listed sources when relevant.
-3. If the context is partial, say what is missing, then explain everything you CAN conclude from the sources.
-4. Write a substantive answer (not a one-line summary). Aim for roughly 4–8 paragraphs or equivalent structured sections.
-5. Structure the response as:
-   - Opening: direct answer in 2–4 sentences
-   - **Key points:** bullet list (5–10 bullets when the context supports it)
-   - **Details:** one or more paragraphs expanding on themes, dates, people, and practices from the sources
-   - **{refs_heading}:** bullet list citing each source you used
-6. When you cite a source inline or in references, use:
-   **{cite_label} N:** document title from context
-   Use the index N from the context headers [1], [2], etc. Titles only — never paste URLs.
-7. Do not include http/https links anywhere in your answer.
+2. Start with a brief summary statement answering the query directly (1-2 sentences).
+3. Then provide details:
+   - For listing/filter queries (years, languages, topics): List ALL documents in a numbered list showing title, type, and year.
+   - For knowledge questions: Provide a structured answer with key points, citing document titles.
+   - For single-keyword queries: Briefly explain what the documents cover, then list the top results.
+4. Use bullet points or numbered lists for readability.
+5. Always mention document titles when referencing sources.
+6. Keep responses concise but complete — aim for quality over length.
+7. If listing many documents (>10), group them or show first 10 with a count summary.
 """
 
-    user_message = f"""Based on the following retrieved documents, answer this question in depth.
+    # Tailor the user message based on query type
+    if is_year_query:
+        user_message = f"""The user searched for: "{query}"
+
+The retrieval system found {len(context_docs)} documents published in {query}.
+List these documents with their titles, types, and a brief description of their content.
+
+**Retrieved Documents (all published in {query}):**
+{context_text}"""
+    elif is_listing_query:
+        user_message = f"""The user asked: "{query}"
+
+The retrieval system found {len(context_docs)} matching documents.
+List ALL matching documents with their titles, types, publication years, and languages.
+
+**Retrieved Documents:**
+{context_text}"""
+    else:
+        user_message = f"""Based on the following {len(context_docs)} retrieved documents, answer this question:
 
 **Question:** {query}
 
-**Retrieved Context ({len(context_parts)} sources):**
+**Retrieved Documents:**
 {context_text}
 
-Provide a comprehensive answer that synthesizes information across sources. Include specific facts, names, and themes from the context. End with a **{refs_heading}** section listing every source you relied on."""
+Provide a comprehensive answer based on the document content."""
 
     try:
         client = get_llm_client()
@@ -360,8 +888,7 @@ Provide a comprehensive answer that synthesizes information across sources. Incl
             model=LLM_ENDPOINT,
             messages=[{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user_message}],
-            max_tokens=MAX_ANSWER_TOKENS,
-            temperature=0.35,
+            max_tokens=2048, temperature=0.2
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -370,487 +897,688 @@ Provide a comprehensive answer that synthesizes information across sources. Incl
         return f"Error generating response: {str(e)}"
 
 
-def _parse_languages(lang) -> list[str]:
-    """Normalize language field (string, list, or JSON array string) to display names."""
-    if lang is None or lang == "":
-        return []
-    if isinstance(lang, list):
-        return [str(x).strip() for x in lang if str(x).strip()]
-    text = str(lang).strip()
-    if text.startswith("["):
-        try:
-            parsed = json.loads(text.replace("'", '"'))
-            if isinstance(parsed, list):
-                return [str(x).strip() for x in parsed if str(x).strip()]
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return [text] if text else []
 
 
-def _language_pills_html(lang) -> str:
-    """Build compact language pill markup for a source card."""
-    names = _parse_languages(lang)
-    if not names:
-        return '<span class="src-lang-pill">🌐 Unknown</span>'
-    pills = []
-    for name in names:
-        code = LANGUAGE_NAME_TO_CODE.get(name.lower(), name.upper()[:3])
-        flag = LANGUAGE_FLAGS.get(code, "🌐")
-        pills.append(f'<span class="src-lang-pill">{flag} {name}</span>')
-    return "".join(pills)
-
-
-def _normalize_file_format(fmt: str) -> str:
-    if not fmt:
-        return "other"
-    f = str(fmt).lower().strip().lstrip(".")
-    if f in ("pdf",):
-        return "pdf"
-    if f in ("doc", "docx", "word", "document", "rtf", "odt"):
-        return "doc"
-    if f in ("ppt", "pptx", "presentation", "odp"):
-        return "ppt"
-    if f in ("xls", "xlsx", "csv", "spreadsheet", "ods"):
-        return "sheet"
-    if f in ("jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "image", "img"):
-        return "image"
-    if f in ("mp3", "wav", "ogg", "m4a", "audio", "mpeg"):
-        return "audio"
-    if f in ("mp4", "mov", "avi", "mkv", "webm", "video"):
-        return "video"
-    return f if f in MEDIA_ICONS else "other"
-
-
-
-def _source_display_name(doc: dict, lang_code: str) -> str:
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    if code == "EN":
-        return doc.get("file_name", "")
-    return doc.get("display_names", {}).get(code, doc.get("file_name", ""))
-
-
-def translate_source_titles(docs, lang_code: str) -> None:
-    """Cache translated document titles per language."""
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    pending = []
-    for doc in docs:
-        if "error" in doc:
-            continue
-        cache = doc.setdefault("display_names", {})
-        cache.setdefault("EN", doc.get("file_name", ""))
-        if code == "EN":
-            cache["EN"] = doc.get("file_name", "")
-            continue
-        if code not in cache:
-            pending.append(doc)
-    if not pending:
-        return
-
-    language = _language_name(code)
-    numbered = "\n".join(f"{i + 1}. {doc['file_name']}" for i, doc in enumerate(pending))
-    prompt = (
-        f"Translate each document title below into {language}.\n"
-        "Return ONLY a JSON array of strings, same order and count.\n\n"
-        f"Titles:\n{numbered}"
-    )
-    try:
-        client = get_llm_client()
-        response = client.chat.completions.create(
-            model=LLM_ENDPOINT,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=768,
-            temperature=0.2,
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```(?:json)?\s*", "", raw)
-            raw = re.sub(r"\s*```$", "", raw)
-        translated = json.loads(raw)
-        if not isinstance(translated, list) or len(translated) != len(pending):
-            raise ValueError("unexpected translation shape")
-        for doc, title in zip(pending, translated):
-            doc["display_names"][code] = str(title).strip() or doc["file_name"]
-    except Exception as e:
-        print(f"[WARN] Source title translation failed: {e}", file=sys.stderr)
-        traceback.print_exc()
-        for doc in pending:
-            doc["display_names"][code] = doc.get("file_name", "")
-
-
-def _md_escape_url(url: str) -> str:
-    return (url or "").replace(")", "%29")
-
-
-def _looks_like_url(text: str) -> bool:
-    t = (text or "").strip().lower()
-    return t.startswith("http://") or t.startswith("https://")
-
-
-def _replace_visible_urls(text: str, docs, lang_code: str) -> str:
-    """Turn bare URLs and [url](url) links into titled markdown links."""
-    if not text or not docs:
-        return text
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    out = text
-    for doc in docs:
-        if "error" in doc:
-            continue
-        url = (doc.get("url") or "").strip()
-        if not url:
-            continue
-        name = _source_display_name(doc, code)
-        url_md = _md_escape_url(url)
-        md_link = f"[{name}]({url_md})"
-        url_pat = re.escape(url)
-        out = re.sub(
-            rf"\[\s*{url_pat}\s*\]\(\s*{url_pat}\s*\)",
-            md_link,
-            out,
-            flags=re.IGNORECASE,
-        )
-        out = re.sub(
-            rf"(?<!\]\()(?<!\[){url_pat}(?!\))",
-            md_link,
-            out,
-            flags=re.IGNORECASE,
-        )
-    return out
-
-
-def _link_phrase_in_text(text: str, phrase: str, url: str) -> str:
-    """Link every occurrence of phrase when it is not already part of a markdown link."""
-    phrase = (phrase or "").strip()
-    if len(phrase) < 3 or not url:
-        return text
-    url_md = _md_escape_url(url)
-    link = f"[{phrase}]({url_md})"
-    if link in text:
-        return text
-    pattern = rf"(?<!\[)({re.escape(phrase)})(?!\]\([^)]*\))"
-    return re.sub(pattern, link, text, flags=re.IGNORECASE)
-
-
-def _link_source_citation_lines(text: str, docs, lang_code: str) -> str:
-    """Link full lines after **Source N:** (any media type with a URL)."""
-    cite_labels = "|".join(re.escape(v) for v in set(SOURCE_REF_LABELS.values()))
-    out = text
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-
+def format_sources(docs):
+    """Format source documents with icons and clickable View Document URLs."""
+    if not docs or (isinstance(docs[0], dict) and "error" in docs[0]):
+        return "No sources retrieved."
+    sources_md = f"**\U0001F4DA {len(docs)} Matched Document(s):**\n\n"
     for i, doc in enumerate(docs, 1):
-        if "error" in doc:
-            continue
-        url = (doc.get("url") or "").strip()
-        if not url:
-            continue
-        name = _source_display_name(doc, code)
-        url_md = _md_escape_url(url)
-
-        line_pattern = (
-            rf"(?:^|\n)(\s*[-*]?\s*)"
-            rf"(\*\*(?:{cite_labels})\s*{i}\s*:?\s*\*\*\s*:?\s*)"
-            rf"([^\n]+)"
+        work_type = doc.get("work_type") or ""
+        language = doc.get("language") or ""
+        icon = MEDIA_ICONS.get(work_type.lower(), "\U0001F4C4")
+        flag = LANGUAGE_FLAGS.get(language, LANGUAGE_FLAGS["UNKNOWN"])
+        classification = doc.get("content_classification") or "N/A"
+        title_display = doc.get("title") or doc.get("file_name") or "Unknown"
+        score = doc.get("score", 0)
+        sources_md += (
+            f"**{i}. {icon} {title_display}** (relevance: {score:.0%})\n"
+            f"   {flag} {language or 'N/A'} \u2022 "
+            f"\U0001F4D6 {work_type or 'N/A'} \u2022 "
+            f"\U0001F3F7\uFE0F {classification}\n"
         )
-
-        def _line_repl(match, display=name, link_url=url_md):
-            prefix, label, body = match.group(1), match.group(2), match.group(3).strip()
-            body_plain = re.sub(r"\*+", "", body).strip()
-            if "](http" in body or "[https://" in body.lower():
-                return match.group(0)
-            if not body_plain or _looks_like_url(body_plain):
-                target = display
-            else:
-                target = body_plain
-            return f"{prefix}{label}[{target}]({link_url})"
-
-        out = re.sub(line_pattern, _line_repl, out, flags=re.IGNORECASE)
-
-    return out
+        if doc.get("knowledge_area"):
+            sources_md += f"   \U0001F4D8 {doc['knowledge_area']}\n"
+        if doc.get("contributor"):
+            sources_md += f"   \U0001F464 {clean_contributor(doc['contributor']).title()}\n"
+        if doc.get("country"):
+            sources_md += f"   \U0001F30D {doc['country']}\n"
+        sources_md += f"   \U0001F517 [\U0001F4C2 View Document]({doc['url']})\n"
+        sources_md += "\n"
+    return sources_md
 
 
-def _append_linked_references(answer: str, docs, lang_code: str) -> str:
-    """Append a fully linked reference list (all formats with URLs)."""
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    heading = REFERENCES_HEADINGS.get(code, "References")
-    cite = SOURCE_REF_LABELS.get(code, "Source")
-
-    if re.search(
-        r"(?i)\*\*(?:references|referencias|références|riferimenti|referências)\s*:?\*\*",
-        answer,
-    ):
-        return answer
-
-    lines = [f"\n\n**{heading} :**\n"]
-    for i, doc in enumerate(docs, 1):
-        if "error" in doc:
-            continue
-        name = _source_display_name(doc, code)
-        url = (doc.get("url") or "").strip()
-        if url:
-            lines.append(f"- **{cite} {i}:** [{name}]({_md_escape_url(url)})\n")
-        else:
-            lines.append(f"- **{cite} {i}:** {name}\n")
-    return answer.rstrip() + "".join(lines)
-
-
-def linkify_answer_sources(answer: str, docs, lang_code: str) -> str:
-    """Link all cited sources in the answer (PDF, DOCX, PPT, images, etc.)."""
-    if not answer or not docs:
-        return answer
-
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    translate_source_titles(docs, code)
-    out = _replace_visible_urls(answer, docs, code)
-    out = _link_source_citation_lines(out, docs, code)
-
-    phrases: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    for doc in docs:
-        if "error" in doc:
-            continue
-        url = (doc.get("url") or "").strip()
-        if not url:
-            continue
-        for title in (_source_display_name(doc, code), doc.get("file_name", "")):
-            title = (title or "").strip()
-            key = title.lower()
-            if len(title) >= 4 and key not in seen:
-                seen.add(key)
-                phrases.append((title, url))
-
-    phrases.sort(key=lambda item: len(item[0]), reverse=True)
-    for title, url in phrases:
-        out = _link_phrase_in_text(out, title, url)
-
-    return _append_linked_references(out, docs, code)
-
-
-def answer_to_html(answer: str, docs, lang_code: str) -> str:
-    linked = linkify_answer_sources(answer, docs, lang_code)
-    return markdown_to_html(linked)
-
-
-def format_sources(docs, lang_code: str = DEFAULT_LANG_CODE):
-    """Sidebar source cards — translated titles, whole card opens URL."""
-    if not docs or "error" in docs[0]:
-        return '<div class="sources-empty">No sources retrieved.</div>'
-
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    translate_source_titles(docs, code)
-    open_labels = OPEN_RESOURCE_LABELS.get(code, OPEN_RESOURCE_LABELS["EN"])
-
-    badge_class = {
-        "pdf": "src-badge-pdf",
-        "doc": "src-badge-doc",
-        "audio": "src-badge-audio",
-        "image": "src-badge-image",
-        "video": "src-badge-video",
-        "ppt": "src-badge-ppt",
-        "sheet": "src-badge-sheet",
-    }
-    cards = ""
-    for i, doc in enumerate(docs, 1):
-        if "error" in doc:
-            continue
-        mtype = _normalize_file_format(doc.get("file_format", ""))
-        icon = MEDIA_ICONS.get(mtype, "")
-        bclass = badge_class.get(mtype, "src-badge-other")
-        display_name = _source_display_name(doc, code)
-        name_esc = html.escape(display_name)
-        url = (doc.get("url") or "").strip()
-        open_label = open_labels.get(mtype, open_labels["other"])
-
-        inner = (
-            f'<div class="src-card-title">{i}. {icon} '
-            f'<span class="src-file-name">{name_esc}</span></div>'
-            f'<div class="src-card-meta">'
-            f'  <span class="src-badge {bclass}">{html.escape(mtype.upper())}</span>'
-            f"  {_language_pills_html(doc.get('language'))}"
-            f"</div>"
-        )
-        if url:
-            url_esc = html.escape(url, quote=True)
-            inner += f'<span class="src-open-hint">{html.escape(open_label)} &#8599;</span>'
-            cards += (
-                f'<a class="src-card src-card-link" href="{url_esc}" target="_blank" '
-                f'rel="noopener noreferrer" title="{name_esc}">{inner}</a>'
-            )
-        else:
-            cards += f'<div class="src-card src-card-static">{inner}</div>'
-
-    return f'<div class="sources-scroll">{cards}</div>'
-
-def _loading_card(title: str, hint: str) -> str:
-    return (
-        '<div class="rag-premium-load">'
-        '<div class="rag-premium-spin" aria-hidden="true"></div>'
-        '<div class="rag-premium-load-text">'
-        f'<span class="rag-premium-load-title">{title}</span>'
-        f'<span class="rag-premium-load-hint">{hint}</span>'
-        "</div></div>"
-    )
-
-
-LOADING_RETRIEVE = _loading_card(
-    "Retrieving context",
-    "Running semantic search on the vector index…",
-)
-LOADING_GENERATE = _loading_card(
-    "Composing your answer",
-    "Grounding the response in retrieved sources…",
-)
-LOADING_LANGUAGE = _loading_card(
-    "Updating language",
-    "Regenerating the answer in your selected language…",
-)
-
-
-# ============================================================
-# WEB UI (HTML / CSS / JS)
-# ============================================================
-_PKG_DIR = Path(__file__).resolve().parent
-_STATIC_DIR = _PKG_DIR / "static"
-_TEMPLATE_PATH = _PKG_DIR / "templates" / "rag.html"
-_md = MarkdownIt("commonmark", {"linkify": False})
-
-
-def _answer_links_open_new_tab(html: str) -> str:
-    """Ensure answer links open in a new tab."""
-
-    def _add_attrs(match: re.Match) -> str:
-        attrs = match.group(1)
-        if re.search(r"\btarget\s*=", attrs, re.IGNORECASE):
-            return match.group(0)
-        return f'<a target="_blank" rel="noopener noreferrer"{attrs}>'
-
-    return re.sub(r"<a(\s+[^>]*?)>", _add_attrs, html, flags=re.IGNORECASE)
-
-
-def markdown_to_html(text: str) -> str:
-    if not text or not text.strip():
-        return ""
-    stripped = text.strip()
-    if stripped.startswith("<") and any(tag in stripped for tag in ("<div", "<p", "<span")):
-        return text
-    return _answer_links_open_new_tab(_md.render(text))
-
-
-class QueryRequest(BaseModel):
-    query: str
-    media_filter: str = "All"
-    lang_code: str = DEFAULT_LANG_CODE
-
-
-class LanguageRequest(BaseModel):
-    lang_code: str = DEFAULT_LANG_CODE
-
-
-def _ui_labels_payload(lang_code: str) -> dict:
-    code = (lang_code or DEFAULT_LANG_CODE).upper()
-    labels = UI_SECTION_LABELS.get(code, UI_SECTION_LABELS["EN"])
-    return {"ui_labels": labels}
-
-
-def _sse_payload(answer_html: str | None = None, sources_html: str | None = None, ui_labels: dict | None = None) -> str:
-    data = {}
-    if answer_html is not None:
-        data["answer_html"] = answer_html
-    if sources_html is not None:
-        data["sources_html"] = sources_html
-    if ui_labels is not None:
-        data["ui_labels"] = ui_labels
-    return f"data: {json.dumps(data)}\n\n"
-
-
-def _chat_events(message: str, media_filter: str, lang_code: str = DEFAULT_LANG_CODE):
-    global _last_query, _last_docs, _last_lang_code, _last_media_filter
+def chat(message, media_filter):
+    """Main RAG pipeline: two-tier retrieval + LLM generation.
+    
+    Flow:
+    1. First perform exact keyword matching against ALL table columns
+    2. Return all directly matched documents
+    3. If no exact match, trigger deep semantic search
+    4. Generate LLM answer from matched context
+    """
+    global _last_query, _last_docs
     if not message or not message.strip():
-        yield _sse_payload("", "")
-        return
-
-    yield _sse_payload(LOADING_RETRIEVE, LOADING_RETRIEVE)
-    _last_query = message.strip()
-    _last_lang_code = (lang_code or DEFAULT_LANG_CODE).upper()
-    _last_media_filter = media_filter or "All"
-    docs = retrieve_context(message, media_filter=_last_media_filter)
+        return "", ""
+    _last_query = message
+    docs = retrieve_context(message, media_filter=media_filter)
     _last_docs = docs
+    if docs and isinstance(docs[0], dict) and "error" in docs[0]:
+        return f"**Retrieval Error:** {docs[0]['error']}", "No sources available."
 
-    if docs and "error" in docs[0]:
-        err = f"<p><strong>Retrieval error:</strong> {docs[0]['error']}</p>"
-        yield _sse_payload(err, '<div class="sources-empty">No sources available.</div>')
-        return
+    # If no documents pass either tier
+    if not docs:
+        return (
+            "**\u274C No relevant documents found.**\n\n"
+            "The search term does not match any content in the knowledge base. "
+            "Please try a different query or check for typos."
+        ), ""
 
-    sources = format_sources(docs, _last_lang_code)
-    yield _sse_payload(LOADING_GENERATE, sources)
-    answer = generate_answer(
-        message, docs, language_pref=_language_name(_last_lang_code), lang_code=_last_lang_code
-    )
-    yield _sse_payload(answer_to_html(answer, docs, _last_lang_code), sources)
+    answer = generate_answer(message, docs, language_pref="English")
+    sources = format_sources(docs)
+    return answer, sources
 
 
-def _language_events(lang_code: str):
-    global _last_query, _last_docs, _last_lang_code
+def switch_language(lang_choice):
+    """Re-generate the answer in the selected language."""
+    global _last_query, _last_docs
     if not _last_query or not _last_docs:
-        yield _sse_payload(
-            "<p><em>Ask a question first, then switch languages.</em></p>"
-        )
-        return
-    if _last_docs and "error" in _last_docs[0]:
-        yield _sse_payload("<p>No content available to translate.</p>")
-        return
+        return "*Ask a question first, then switch languages.*"
+    if _last_docs and isinstance(_last_docs[0], dict) and "error" in _last_docs[0]:
+        return "No content available to translate."
+    lang_map = {
+        "\U0001F1EC\U0001F1E7 English": "EN",
+        "\U0001F1EA\U0001F1F8 Espa\u00f1ol": "ES",
+        "\U0001F1EB\U0001F1F7 Fran\u00e7ais": "FR",
+        "\U0001F1EE\U0001F1F9 Italiano": "IT",
+        "\U0001F1E7\U0001F1F7 Portugu\u00eas": "POR"
+    }
+    code = lang_map.get(lang_choice, "EN")
+    language_name = LANGUAGE_NAMES.get(code, "English")
+    return generate_answer(_last_query, _last_docs, language_pref=language_name)
 
-    _last_lang_code = (lang_code or DEFAULT_LANG_CODE).upper()
-    yield _sse_payload(LOADING_LANGUAGE)
-    sources = format_sources(_last_docs, _last_lang_code)
-    answer = generate_answer(
-        _last_query,
-        _last_docs,
-        language_pref=_language_name(_last_lang_code),
-        lang_code=_last_lang_code,
-    )
-    yield _sse_payload(
-        answer_to_html(answer, _last_docs, _last_lang_code),
-        sources,
-        _ui_labels_payload(_last_lang_code),
-    )
+
+# ============================================================
+# GRADIO UI — GSDP Semantic Search (reference design)
+# ============================================================
+CUSTOM_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700;800&display=swap');
+
+/* Hide Gradio default footer: Use via API · Built with Gradio · Settings */
+.gradio-container .wrap > footer,
+.gradio-container footer:not(.gsdp-footer) {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Single page scroll — no nested scroll areas */
+html, body {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+}
+
+/* Full viewport width */
+.gradio-container,
+.gradio-container .main,
+.gradio-container .wrap,
+.gradio-container .contain,
+.gradio-container .column,
+.gradio-container .row,
+.gradio-container .block,
+.gradio-container .form {
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}
+
+.gradio-container {
+    --blue-800: #082f4d;
+    --blue-600: #004a99;
+    --blue-500: #1f6eb8;
+    --blue-100: #daeaf8;
+    --blue-50: #eef4fc;
+    --surface: #ffffff;
+    --border: #d0dff0;
+    --border-2: #bccfe8;
+    --ink: #0f2744;
+    --ink-muted: #4a6b8c;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0.75rem clamp(1rem, 2.5vw, 2rem) 2.5rem !important;
+    font-family: "Source Sans 3", "Inter", ui-sans-serif, system-ui, sans-serif !important;
+    color: var(--ink) !important;
+    background:
+        radial-gradient(ellipse 130% 60% at 50% -10%, rgba(31, 110, 184, 0.13) 0%, transparent 60%),
+        radial-gradient(ellipse 80% 40% at 95% 10%, rgba(0, 74, 153, 0.07) 0%, transparent 50%),
+        linear-gradient(170deg, #e8f2fc 0%, #eef4fc 40%, #f3f7fd 100%) !important;
+}
+
+/* Section cards span full width */
+.header-section,
+.panel,
+.content-row {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+/* Hero header */
+.header-section {
+    position: relative !important;
+    overflow: hidden !important;
+    background: linear-gradient(118deg, #061526 0%, #0a2d54 30%, #093368 55%, #0d4a8f 80%, #004a99 100%) !important;
+    padding: 1.4rem clamp(1rem, 3vw, 2rem) 1.3rem !important;
+    border-radius: var(--radius-lg) !important;
+    margin-bottom: 1.25rem !important;
+    box-shadow: 0 6px 24px -4px rgba(0, 74, 153, 0.3) !important;
+    border: none !important;
+}
+.header-section::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 22px 22px;
+    pointer-events: none;
+}
+.header-section .prose, .header-section .md { position: relative; z-index: 1; }
+.hero-home-link {
+    display: inline-flex !important;
+    align-items: center;
+    font-weight: 600 !important;
+    font-size: 0.82rem !important;
+    color: rgba(220, 238, 255, 0.95) !important;
+    text-decoration: none !important;
+    padding: 0.3rem 0.85rem !important;
+    border-radius: 99px !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+}
+.hero-home-link:hover { background: rgba(255, 255, 255, 0.22) !important; color: #fff !important; }
+.hero-title {
+    color: #fff !important;
+    font-size: 1.55rem !important;
+    font-weight: 800 !important;
+    text-align: center !important;
+    margin: 0.5rem 0 0.35rem !important;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.22);
+}
+.hero-desc {
+    color: rgba(210, 230, 255, 0.88) !important;
+    font-size: 0.9rem !important;
+    text-align: center !important;
+    max-width: 46rem;
+    margin: 0 auto !important;
+    line-height: 1.55 !important;
+}
+.header-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem;
+    margin-top: 0.7rem;
+}
+.hbadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(220, 238, 255, 0.92);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+/* Dark navy panels */
+.panel {
+    position: relative !important;
+    overflow: hidden !important;
+    background: linear-gradient(165deg, #071525 0%, #0f2744 48%, #123456 100%) !important;
+    border: 1px solid rgba(120, 170, 220, 0.22) !important;
+    border-radius: var(--radius-lg) !important;
+    padding: 1.15rem 1.35rem 1.25rem !important;
+    margin-bottom: 1rem !important;
+    box-shadow: 0 10px 32px -6px rgba(5, 26, 48, 0.35) !important;
+}
+.panel::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
+}
+.panel > .gap, .panel .block { position: relative; z-index: 1; }
+
+.pill-label, .section-chip {
+    display: inline-flex !important;
+    align-items: center;
+    margin-bottom: 0.55rem !important;
+    padding: 0.28rem 0.75rem !important;
+    border-radius: 99px !important;
+    background: linear-gradient(135deg, #2a84d4 0%, #1f6eb8 45%, #004a99 100%) !important;
+    color: #fff !important;
+    font-size: 0.7rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.07em !important;
+    text-transform: uppercase !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 2px 8px rgba(0, 74, 153, 0.35) !important;
+}
+.section-chip { text-transform: uppercase !important; }
+
+/* Query input */
+.search-card .block,
+.search-card .form,
+.search-card textarea,
+.search-card input[type="text"] {
+    width: 100% !important;
+    max-width: 100% !important;
+}
+.search-card textarea, .search-card input[type="text"] {
+    font-size: 1rem !important;
+    color: var(--ink) !important;
+    background: #fff !important;
+    border: 1.5px solid var(--border-2) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: 0 2px 10px rgba(8, 28, 56, 0.08) !important;
+    min-height: 3.25rem !important;
+}
+.search-card textarea:focus {
+    border-color: var(--blue-600) !important;
+    box-shadow: 0 0 0 3px rgba(0, 74, 153, 0.14) !important;
+}
+
+.search-actions { gap: 0.65rem !important; margin-top: 0.85rem !important; }
+.search-actions .btn-primary button {
+    flex: 3 !important;
+    width: 100% !important;
+    font-weight: 700 !important;
+    color: #fff !important;
+    border: 1px solid rgba(0, 58, 122, 0.6) !important;
+    background: linear-gradient(160deg, #2178c4 0%, #004a99 60%, #003a7a 100%) !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 0.65rem 1.1rem !important;
+    box-shadow: 0 4px 14px rgba(0, 74, 153, 0.3) !important;
+}
+.search-actions .btn-primary button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 74, 153, 0.38) !important;
+}
+.search-actions .btn-secondary button {
+    flex: 1 !important;
+    width: 100% !important;
+    font-weight: 600 !important;
+    color: var(--blue-800) !important;
+    background: #fff !important;
+    border: 1.5px solid var(--border-2) !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 0.65rem 1.1rem !important;
+}
+.search-actions .btn-secondary button:hover {
+    background: var(--blue-50) !important;
+    border-color: var(--blue-500) !important;
+}
+
+/* Filters row */
+.toolbar-row { gap: 1.25rem 2rem !important; align-items: flex-end !important; }
+.field-media { min-width: 200px; }
+.toolbar-row select, .toolbar-row .gr-dropdown {
+    max-width: 100%;
+    width: 100% !important;
+    background: #fff !important;
+    border: 1.5px solid var(--border-2) !important;
+    border-radius: var(--radius-md) !important;
+    color: var(--ink) !important;
+}
+
+/* Language pills — visible on dark toolbar (Gradio styles label, not span) */
+.toolbar-row .lang-radio.block,
+.toolbar-row .lang-radio fieldset {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+}
+.toolbar-row .lang-radio .wrap {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.45rem !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+.toolbar-row .lang-radio label {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    margin: 0 !important;
+    padding: 0.4rem 0.85rem !important;
+    border-radius: 99px !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    line-height: 1.2 !important;
+    color: var(--ink) !important;
+    background: #fff !important;
+    border: 1.5px solid var(--border-2) !important;
+    box-shadow: 0 1px 4px rgba(8, 28, 56, 0.08) !important;
+    cursor: pointer !important;
+}
+.toolbar-row .lang-radio label span {
+    color: inherit !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+.toolbar-row .lang-radio label:hover {
+    background: var(--blue-50) !important;
+    border-color: var(--blue-500) !important;
+    color: var(--blue-800) !important;
+}
+.toolbar-row .lang-radio label.selected,
+.toolbar-row .lang-radio label:has(input:checked) {
+    color: #fff !important;
+    background: linear-gradient(135deg, #2a84d4 0%, #1f6eb8 45%, #004a99 100%) !important;
+    border-color: rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 2px 10px rgba(0, 74, 153, 0.4) !important;
+}
+.toolbar-row .lang-radio label.selected span,
+.toolbar-row .lang-radio label:has(input:checked) span {
+    color: #fff !important;
+}
+.toolbar-row .lang-radio input {
+    accent-color: var(--blue-600) !important;
+    flex-shrink: 0 !important;
+}
+.toolbar-row .lang-radio .sr-only { display: none !important; }
+
+/* Results — equal-height cards, each with its own scroll */
+.results-area {
+    width: 100% !important;
+    margin-top: 0.25rem !important;
+    overflow: visible !important;
+}
+.content-row {
+    gap: 1rem !important;
+    align-items: stretch !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+}
+.answer-column,
+.sources-column {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+.answer-column { flex: 3 1 0% !important; }
+.sources-column { flex: 1 1 0% !important; min-width: 260px !important; }
+.content-row .column > .gap,
+.content-row .column > .form {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    overflow: visible !important;
+}
+.content-row .block:not(.answer-panel-card):not(.sources-panel-card) {
+    overflow: visible !important;
+    max-height: none !important;
+}
+.content-row .answer-panel-card.block,
+.content-row .sources-panel-card.block {
+    flex: 1 1 auto !important;
+    align-self: stretch !important;
+    width: 100% !important;
+    background: var(--surface) !important;
+    border: 1.5px solid var(--border) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: 0 4px 16px -2px rgba(8, 28, 56, 0.1) !important;
+    min-height: 220px !important;
+    height: min(65vh, 680px) !important;
+    max-height: min(65vh, 680px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    padding: 1.25rem 1.35rem !important;
+    margin: 0 !important;
+    scroll-behavior: smooth;
+}
+.content-row .answer-panel-card.block::-webkit-scrollbar,
+.content-row .sources-panel-card.block::-webkit-scrollbar {
+    width: 8px;
+}
+.content-row .answer-panel-card.block::-webkit-scrollbar-thumb,
+.content-row .sources-panel-card.block::-webkit-scrollbar-thumb {
+    background: var(--border-2);
+    border-radius: 99px;
+}
+.content-row .answer-panel-card.block::-webkit-scrollbar-thumb:hover,
+.content-row .sources-panel-card.block::-webkit-scrollbar-thumb:hover {
+    background: var(--blue-500);
+}
+.content-row .sources-panel-card.block {
+    padding: 1.25rem 1.1rem 1.25rem 1.25rem !important;
+}
+.results-chip-md.block {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 0 0.55rem 0 !important;
+    overflow: visible !important;
+    flex: 0 0 auto !important;
+}
+.content-row .answer-panel-card .prose,
+.content-row .sources-panel-card .prose {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+    font-size: 1rem !important;
+    line-height: 1.7 !important;
+    color: var(--ink) !important;
+}
+.answer-panel-card .prose p:first-child em,
+.sources-panel-card .prose p:first-child em {
+    color: var(--ink-muted) !important;
+    font-style: normal !important;
+}
+.answer-panel-card a, .sources-panel-card a {
+    color: var(--blue-600) !important;
+    font-weight: 600 !important;
+}
+
+.gsdp-footer {
+    text-align: center;
+    color: var(--ink-muted);
+    padding: 1.2rem 1rem 0.5rem;
+    font-size: 0.79rem;
+    border-top: 1px solid var(--border);
+    margin-top: 1rem;
+}
+.gsdp-footer-logo {
+    font-weight: 700;
+    color: var(--blue-600);
+    margin-bottom: 0.35rem;
+    font-size: 0.88rem;
+}
+.gsdp-footer-sub {
+    font-size: 0.79rem;
+    line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+    .content-row { flex-direction: column !important; }
+    .toolbar-row { flex-direction: column !important; align-items: stretch !important; }
+}
+"""
+
+_LANG_CHOICES = [
+    "\U0001F1EC\U0001F1E7 English",
+    "\U0001F1EA\U0001F1F8 Espa\u00f1ol",
+    "\U0001F1EB\U0001F1F7 Fran\u00e7ais",
+    "\U0001F1EE\U0001F1F9 Italiano",
+    "\U0001F1E7\U0001F1F7 Portugu\u00eas",
+]
+
+_ANSWER_PLACEHOLDER = (
+    "*Ask a question above to explore the knowledge base...*"
+)
+_SOURCES_PLACEHOLDER = (
+    "*Sources will appear here after your query...*"
+)
+
+
+def create_app():
+    """Build the Gradio application (GSDP Semantic Search reference UI)."""
+    home_url = GSDP_HOME_URL.rstrip("/") or "/"
+
+    with gr.Blocks(
+        css=CUSTOM_CSS,
+        fill_width=True,
+        title="GSDP Semantic Search",
+        theme=gr.themes.Base(
+            primary_hue="blue",
+            secondary_hue="blue",
+            neutral_hue="slate",
+            font=[gr.themes.GoogleFont("Source Sans 3"), "sans-serif"],
+        ),
+    ) as app:
+
+        with gr.Column(elem_classes="header-section"):
+            gr.Markdown(
+                f'<div class="hero-home-row">'
+                f'<a href="{home_url}" class="hero-home-link" target="_top">'
+                f"&#8592; Home</a></div>",
+                elem_classes="hero-home-md",
+            )
+            gr.Markdown(
+                '<h1 class="hero-title">Global Salesian Digital Platform '
+                "Semantic Search</h1>"
+                '<p class="hero-desc">AI-powered search and Q&amp;A over the '
+                "Salesian multilingual knowledge base &mdash; PDFs, audio "
+                "recordings, images, and video content across five languages."
+                "</p>"
+                '<div class="header-badges">'
+                '<span class="hbadge">&#128196; PDF Documents</span>'
+                '<span class="hbadge">&#127911; Audio</span>'
+                '<span class="hbadge">&#128444;&#65039; Images</span>'
+                '<span class="hbadge">&#127909; Video</span>'
+                '<span class="hbadge">&#127760; 5 Languages</span>'
+                "</div>"
+            )
+
+        with gr.Column(elem_classes="panel search-card"):
+            gr.Markdown('<span class="pill-label">Your question</span>')
+            query_input = gr.Textbox(
+                show_label=False,
+                placeholder=(
+                    "\U0001F50D Ask anything \u2014 e.g., What is the Preventive "
+                    "System methodology?"
+                ),
+                lines=2,
+                max_lines=4,
+            )
+            with gr.Row(elem_classes="search-actions"):
+                submit_btn = gr.Button(
+                    "\u2728 Search & Analyze",
+                    variant="primary",
+                    elem_classes="btn-primary",
+                    scale=3,
+                )
+                clear_btn = gr.Button(
+                    "\u2715 Clear",
+                    elem_classes="btn-secondary",
+                    scale=1,
+                )
+
+        with gr.Row(elem_classes="panel toolbar-row"):
+            with gr.Column(elem_classes="field-media", scale=1, min_width=200):
+                gr.Markdown('<span class="pill-label">Filter by media type</span>')
+                media_filter = gr.Dropdown(
+                    choices=["All", "PDF", "Document", "Presentation", "Audio", "Image", "Video"],
+                    value="All",
+                    show_label=False,
+                    container=False,
+                )
+            with gr.Column(elem_classes="field-lang", scale=2):
+                gr.Markdown('<span class="pill-label">Response language</span>')
+                lang_radio = gr.Radio(
+                    choices=_LANG_CHOICES,
+                    value=_LANG_CHOICES[0],
+                    show_label=False,
+                    elem_classes="lang-radio",
+                    interactive=True,
+                )
+
+        with gr.Column(elem_classes="results-area"):
+            with gr.Row(elem_classes="content-row"):
+                with gr.Column(scale=3, elem_classes="answer-column"):
+                    gr.Markdown(
+                        '<span class="section-chip">&#128172; Answer</span>',
+                        elem_classes="results-chip-md",
+                    )
+                    answer_output = gr.Markdown(
+                        value=_ANSWER_PLACEHOLDER,
+                        show_label=False,
+                        elem_classes="answer-panel-card",
+                        container=False,
+                    )
+                with gr.Column(scale=1, elem_classes="sources-column", min_width=260):
+                    gr.Markdown(
+                        '<span class="section-chip">&#128218; Retrieved Sources</span>',
+                        elem_classes="results-chip-md",
+                    )
+                    sources_output = gr.Markdown(
+                        value=_SOURCES_PLACEHOLDER,
+                        show_label=False,
+                        elem_classes="sources-panel-card",
+                        container=False,
+                    )
+
+        gr.Markdown(
+            '<footer class="gsdp-footer">'
+            '<div class="gsdp-footer-logo">\U0001F30D&nbsp;&nbsp;Global Salesian Digital '
+            "Platform Semantic Search</div>"
+            '<div class="gsdp-footer-sub">Powered by Bosco Soft Technologies '
+            "Pvt Ltd&nbsp;&nbsp;&middot;&nbsp;&nbsp;Multilingual Salesian Knowledge "
+            "Corpus</div></footer>"
+        )
+
+        submit_btn.click(
+            fn=chat,
+            inputs=[query_input, media_filter],
+            outputs=[answer_output, sources_output],
+        )
+        query_input.submit(
+            fn=chat,
+            inputs=[query_input, media_filter],
+            outputs=[answer_output, sources_output],
+        )
+        lang_radio.change(
+            fn=switch_language,
+            inputs=[lang_radio],
+            outputs=[answer_output],
+        )
+        clear_btn.click(
+            fn=lambda: ("", _ANSWER_PLACEHOLDER, _SOURCES_PLACEHOLDER),
+            outputs=[query_input, answer_output, sources_output],
+        )
+
+    app.show_api = False
+    return app
 
 
 def mount_rag_ui(fastapi_app: FastAPI, path: str = "/rag") -> None:
-    base = path.rstrip("/") or "/rag"
-    router = APIRouter(prefix=base, tags=["rag"])
-
-    @router.get("", response_class=HTMLResponse, include_in_schema=False)
-    @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-    def rag_page():
-        html = _TEMPLATE_PATH.read_text(encoding="utf-8")
-        html = html.replace("{{GSDP_HOME_URL}}", GSDP_HOME_URL)
-        html = html.replace("{{BASE_PATH}}", base)
-        return HTMLResponse(html)
-
-    @router.post("/api/query", include_in_schema=False)
-    def rag_query(body: QueryRequest):
-        def stream():
-            for chunk in _chat_events(body.query, body.media_filter, body.lang_code):
-                yield chunk
-
-        return StreamingResponse(stream(), media_type="text/event-stream")
-
-    @router.post("/api/language", include_in_schema=False)
-    def rag_language(body: LanguageRequest):
-        def stream():
-            for chunk in _language_events(body.lang_code):
-                yield chunk
-
-        return StreamingResponse(stream(), media_type="text/event-stream")
-
-    fastapi_app.include_router(router)
-    static_mount = f"{base}/static"
-    if not any(getattr(r, "path", None) == static_mount for r in fastapi_app.routes):
-        fastapi_app.mount(
-            static_mount,
-            StaticFiles(directory=str(_STATIC_DIR)),
-            name="rag_static",
-        )
+    """Mount the Gradio RAG UI on the main FastAPI application."""
+    gr.mount_gradio_app(fastapi_app, create_app(), path=path, show_api=False)
 
 
-def mount_rag_gradio(fastapi_app: FastAPI, path: str = "/rag") -> None:
-    mount_rag_ui(fastapi_app, path=path)
+
+# ============================================================
+# APPLICATION ENTRY POINT
+# ============================================================
+# app = FastAPI()
+# mount_rag_ui(app, path="/")
+
+# if __name__ == "__main__":
+#     import uvicorn
+#     port = int(os.environ.get("PORT", 8080))
+#     print(f"Starting GSDP Semantic Search on port {port}...")
+#     uvicorn.run(app, host="0.0.0.0", port=port)

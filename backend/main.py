@@ -15,7 +15,7 @@ from salesianonline_rag.app import mount_rag_ui
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # RAG is mounted below; this hook confirms the module ran with the API process.
-    print("[startup] Salesian Online RAG UI (HTML) at /rag")
+    print("[startup] Salesian Online RAG UI (Gradio) at /rag")
     yield
 
 

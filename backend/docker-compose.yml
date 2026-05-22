@@ -30,12 +30,12 @@ services:
       - "traefik.http.routers.gsdpapi-http.middlewares=redirect-to-https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
 
-    networks:
-      - n8n-docker_web
+    # networks:
+    #   - n8n-docker_web
 
-networks:
-  n8n-docker_web:
-    name: n8n-docker_web
-    # Set to true on the server where Traefik/n8n already created this network.
-    external: ${DOCKER_EXTERNAL_NETWORK:-false}
+# networks:
+#   n8n-docker_web:
+#     name: n8n-docker_web
+#     # Set to true on the server where Traefik/n8n already created this network.
+#     external: ${DOCKER_EXTERNAL_NETWORK:-false}
 
