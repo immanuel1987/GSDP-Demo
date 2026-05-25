@@ -13,7 +13,7 @@ load_dotenv()
 
 DATABRICKS_SERVER_HOSTNAME = os.getenv("DATABRICKS_SERVER_HOSTNAME")
 DATABRICKS_HTTP_PATH = os.getenv("DATABRICKS_HTTP_PATH")
-DATABRICKS_ACCESS_TOKEN = os.getenv("DATABRICKS_ACCESS_TOKEN")
+DATABRICKS_ACCESS_TOKEN = os.getenv("DATABRICKS_ACCESS_TOKEN","dapi0ed22e2eebb401815093cb95ae46e48f-3")
 
 ONTOLOGY_TABLE = "ontology.bronze.final_table_ontology"
 RESOURCE_EXCEL_TABLE = "ontology.silver.resource_final_excel_driven"
