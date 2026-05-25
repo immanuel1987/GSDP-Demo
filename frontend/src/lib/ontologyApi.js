@@ -1,11 +1,5 @@
 import { ANALYTICS_PROVINCE_DATA } from '../data/analyticsProvinceData'
-import {
-  isBlockedHomeImage,
-  isUsableDynamicSlideImage,
-  staticHeroImageAt,
-  staticHeroSlideMetaAt,
-  staticPanelThumbAt,
-} from '../data/homeStaticImages'
+import { isBlockedHomeImage, isUsableDynamicSlideImage } from '../data/homeStaticImages'
 
 /** Base URL for backend (e.g. `VITE_API_BASE_URL` in `.env.development`). */
 // export function apiBase() {
@@ -33,6 +27,7 @@ export function apiBase() {
   if (s) return s.replace(/\/$/, '')
   return 'https://gsdpapi.boscosofttech.com'
 }
+
 // export function apiBase() {
 //   const raw = import.meta.env.VITE_API_BASE_URL
 //   const s = raw === undefined || raw === null ? '' : String(raw).trim()
@@ -748,9 +743,16 @@ export function buildRecentPdfResourcesFromOntologyRows(rows, { limit = 4 } = {}
   })
 }
 
-/** Thumbnail for trending / resource cards — curated clear photos only. */
-export function resolveHomePanelThumb(_row, index = 0) {
-  return staticPanelThumbAt(index)
+/** Thumbnail for trending / resource cards — corpus only (not hero slider art). */
+export function resolveHomePanelThumb(row, _index = 0) {
+  const url =
+    pickSalesianonlineThumbnailUrl(row) || pickHeroSlideImageUrl(row) || null
+  const title = row?.title || row?.name || ''
+  return {
+    url: url || '',
+    pos: 'center center',
+    alt: typeof title === 'string' ? title : '',
+  }
 }
 
 /** Kind for filter + display (uses docKind from API map when present). */
@@ -1168,7 +1170,7 @@ export function pickHeroSlideImageUrl(row) {
 
 /**
  * Build hero slider entries from ontology API rows (e.g. bronze final_table shape).
- * Prefers rows with an image URL for backgrounds; static archive headers fill gaps at render time.
+ * Prefers rows with an image URL for metadata; homepage slider backgrounds are applied at render via {@link applyHeroSlideImages}.
  */
 export function buildHeroSlidesFromOntologyRows(rows, { maxSlides = 6 } = {}) {
   if (!Array.isArray(rows) || rows.length === 0) return []
@@ -1223,8 +1225,8 @@ export function buildHeroSlidesFromOntologyRows(rows, { maxSlides = 6 } = {}) {
     out.push({
       key: res.id,
       cls: HERO_SLIDE_CLS[out.length % HERO_SLIDE_CLS.length],
-      bg: bg || staticHeroImageAt(out.length),
-      bgPos: staticHeroSlideMetaAt(out.length)?.bgPos || 'center center',
+      bg: bg || null,
+      bgPos: 'center center',
       coverCss: bg ? undefined : res.cover,
       label: label || 'Resource library',
       title: titleText,
