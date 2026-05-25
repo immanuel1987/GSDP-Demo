@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
 import { scrollToSection } from '../../lib/scrollTo'
+import { staticHeroImageAt, staticHeroSlideMetaAt } from '../../data/homeStaticImages'
 
 const BG = {
-  a: 'https://archive.sdb.org/images/headers/cabeceraInterior3.jpg',
-  b: 'https://www.donboscosouthasia.org/websites/donboscosouthasia.org/themes/default/homelayout/img/education.jpg',
-  c: 'https://www.donboscosouthasia.org/websites/donboscosouthasia.org/themes/default/homelayout/img/youth_focus.jpg',
+  a: staticHeroImageAt(0),
+  b: staticHeroImageAt(3),
+  c: staticHeroImageAt(4),
+}
+
+const BG_POS = {
+  a: staticHeroSlideMetaAt(0).bgPos,
+  b: staticHeroSlideMetaAt(3).bgPos,
+  c: staticHeroSlideMetaAt(4).bgPos,
 }
 
 const slides = [
   {
     key: 'a',
     bg: BG.a,
-    bgPos: 'center 30%',
+    bgPos: BG_POS.a,
     eyebrow: 'Welcome to the Global Salesian Digital Platform',
     title: (
       <>
@@ -27,7 +34,7 @@ const slides = [
   {
     key: 'b',
     bg: BG.b,
-    bgPos: 'center center',
+    bgPos: BG_POS.b,
     eyebrow: 'Rector Major · Fr. Fabio Attard',
     title: (
       <>
@@ -43,7 +50,7 @@ const slides = [
   {
     key: 'c',
     bg: BG.c,
-    bgPos: 'center top',
+    bgPos: BG_POS.c,
     eyebrow: 'Strenna 2026 · Do Whatever He Tells You',
     title: (
       <>

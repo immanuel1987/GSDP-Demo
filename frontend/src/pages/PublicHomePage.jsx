@@ -16,11 +16,7 @@ import {
   ragAssistantUrl,
 } from '../lib/ontologyApi'
 import gsdpIntroVideoUrl from '../assets/viedo/AI_Platform_Video_Generation_Request.mp4'
-import {
-  HOME_HERO_STATIC_IMAGES,
-  applyHeroSlideImages,
-  heroSlideImageSrc,
-} from '../data/homeStaticImages'
+import { applyHeroSlideImages } from '../data/homeStaticImages'
 import { ResourceDetailModal } from './dashboard/dashboardViews'
 import './PublicHomePage.css'
 
@@ -49,7 +45,7 @@ function navigateLoginNext(navigate, nextPath) {
 function buildPublicHomeHeroSlides(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return null
   const built = buildHeroSlidesFromOntologyRows(rows, { maxSlides: 6 })
-  return built.length ? applyHeroSlideImages(built) : null
+  return built.length ? applyHeroSlideImages(built, { preferStaticTheme: true }) : null
 }
 
 /** Recent resources strip: PDF documents only, newest first. */
@@ -58,21 +54,27 @@ function buildPublicHomeRecentPdfResources(rows) {
 }
 
 /** Image-only slides when the catalog API is unavailable (no static copy). */
-const FALLBACK_HERO_SLIDES = applyHeroSlideImages([
-  { cls: 'hp-s1', bg: HOME_HERO_STATIC_IMAGES[0], bgPos: 'center 30%' },
-  { cls: 'hp-s2', bg: HOME_HERO_STATIC_IMAGES[1], bgPos: 'center center' },
-  { cls: 'hp-s3', bg: HOME_HERO_STATIC_IMAGES[2], bgPos: 'center 32%' },
-])
+const FALLBACK_HERO_SLIDES = applyHeroSlideImages(
+  [
+    { cls: 'hp-s1', key: 'clear-1' },
+    { cls: 'hp-s2', key: 'clear-2' },
+    { cls: 'hp-s3', key: 'clear-3' },
+    { cls: 'hp-s1', key: 'clear-4' },
+    { cls: 'hp-s2', key: 'clear-5' },
+    { cls: 'hp-s3', key: 'clear-6' },
+  ],
+  { preferStaticTheme: true },
+)
 
-function HeroSlidePhoto({ slide, index, eager }) {
-  const imgSrc = heroSlideImageSrc(slide, index)
+function HeroSlidePhoto({ slide, eager }) {
+  const imgSrc = slide?.bg
   const imgPos = slide?.bgPos || 'center center'
   return (
     <>
       <img
         className="hp-slide-photo"
         src={imgSrc}
-        alt=""
+        alt={slide?.imageAlt || ''}
         width={1920}
         height={820}
         loading={eager ? 'eager' : 'lazy'}
@@ -87,6 +89,7 @@ function HeroSlidePhoto({ slide, index, eager }) {
 function HeroSlider({ slides: slidesProp, loading }) {
   const slidesForRender = applyHeroSlideImages(
     slidesProp?.length ? slidesProp : FALLBACK_HERO_SLIDES,
+    { preferStaticTheme: true },
   )
   const slideCount = slidesForRender.length
 
@@ -166,7 +169,7 @@ function HeroSlider({ slides: slidesProp, loading }) {
               className={`hp-slide ${s.cls}${isActive ? ' active' : ''} hp-slide--has-photo`}
               aria-hidden={!isActive}
             >
-              <HeroSlidePhoto slide={s} index={k} eager={k === 0} />
+              <HeroSlidePhoto slide={s} eager={k === 0} />
             </div>
           )
         })}
@@ -661,6 +664,7 @@ export function PublicHomePage() {
                         {[0, 1, 2, 3].map((i) => (
                           <div key={i} className="hp-trend-row hp-skel-row">
                             <span className="hp-trend-rk hp-skel-pill" />
+                            <span className="hp-trend-thumb hp-skel-block" />
                             <span className="hp-skel-line" />
                             <span className="hp-trend-ct hp-skel-pill hp-skel-pill--sm" />
                           </div>
@@ -685,6 +689,19 @@ export function PublicHomePage() {
                           }}
                         >
                           <span className="hp-trend-rk">{String(i + 1).padStart(2, '0')}</span>
+                          {t.thumb ? (
+                            <img
+                              className="hp-trend-thumb"
+                              src={t.thumb}
+                              alt=""
+                              width={40}
+                              height={40}
+                              loading="lazy"
+                              style={{ objectPosition: t.thumbPos || 'center center' }}
+                            />
+                          ) : (
+                            <span className="hp-trend-thumb hp-trend-thumb--empty" aria-hidden />
+                          )}
                           <span className="hp-trend-q">{t.q}</span>
                           <span className={`hp-trend-ct${t.up ? '' : ' dn'}`}>
                             {t.up && (
@@ -862,15 +879,30 @@ export function PublicHomePage() {
                 </div>
               ))
             ) : recentPdfResources.length > 0 ? (
-              recentPdfResources.map((r) => (
+              recentPdfResources.map((r, i) => (
                 <div key={r.id} className="hp-res-card" onClick={() => setSelectedResource(r)}>
-                  <div className="ti">{r.title}</div>
-                  <div className="ct">
-                    {r.author && r.author !== '—'
-                      ? r.author
-                      : r.publisher && r.publisher !== '—'
-                        ? r.publisher
-                        : '—'}
+                  {r.thumb ? (
+                    <img
+                      className="hp-res-thumb"
+                      src={r.thumb}
+                      alt=""
+                      width={320}
+                      height={120}
+                      loading={i < 2 ? 'eager' : 'lazy'}
+                      style={{ objectPosition: r.thumbPos || 'center center' }}
+                    />
+                  ) : (
+                    <div className="hp-res-thumb hp-res-thumb--empty" aria-hidden />
+                  )}
+                  <div className="hp-res-card-body">
+                    <div className="ti">{r.title}</div>
+                    <div className="ct">
+                      {r.author && r.author !== '—'
+                        ? r.author
+                        : r.publisher && r.publisher !== '—'
+                          ? r.publisher
+                          : '—'}
+                    </div>
                   </div>
                 </div>
               ))

@@ -34,7 +34,6 @@ import re
 import requests as http_requests
 import gradio as gr
 from fastapi import FastAPI
-from gradio.components.textbox import InputHTMLAttributes
 
 # ============================================================
 # CONFIGURATION
@@ -450,6 +449,84 @@ def is_full_sentence_query(query, keywords):
 
 
 # ============================================================
+# SEMANTIC EXPANSIONS (word variations, synonyms, related terms)
+# ============================================================
+# Maps a keyword to semantically related words that should also match.
+# Covers: geographic relationships, morphological variants, domain terms.
+SEMANTIC_EXPANSIONS = {
+    # Geographic: country ↔ nationality/language
+    "italy": ["italian", "italiano", "italia"],
+    "italian": ["italy", "italiano", "italia"],
+    "france": ["french", "français", "francais"],
+    "french": ["france", "français", "francais"],
+    "spain": ["spanish", "español", "espanol"],
+    "spanish": ["spain", "español", "espanol"],
+    "portugal": ["portuguese", "português", "portugues"],
+    "portuguese": ["portugal", "português", "portugues"],
+    "germany": ["german", "deutsch"],
+    "german": ["germany", "deutsch"],
+    "england": ["english", "britain", "british"],
+    "english": ["england", "britain", "british"],
+    "brazil": ["brazilian", "brasil"],
+    "brazilian": ["brazil", "brasil"],
+    "argentina": ["argentinian", "argentine"],
+    # Religious / Educational domain terms
+    "catechism": ["catechesis", "catechetical", "catechist", "catechization"],
+    "catechesis": ["catechism", "catechetical", "catechist", "catechization"],
+    "catechetical": ["catechism", "catechesis", "catechist"],
+    "catechist": ["catechism", "catechesis", "catechetical"],
+    "missionary": ["mission", "missions", "missionario"],
+    "mission": ["missionary", "missions", "missionario"],
+    "missions": ["missionary", "mission"],
+    "education": ["educational", "educator", "educate", "educative"],
+    "educational": ["education", "educator", "educate", "educative"],
+    "educator": ["education", "educational", "educate"],
+    "pedagogy": ["pedagogical", "pedagogue", "pedagogic", "pedagogist"],
+    "pedagogical": ["pedagogy", "pedagogue", "pedagogic"],
+    "spiritual": ["spirituality", "spirit"],
+    "spirituality": ["spiritual", "spirit"],
+    "preventive": ["prevention", "prevent", "preventative"],
+    "prevention": ["preventive", "prevent", "preventative"],
+    "salesian": ["salesians", "salesianity"],
+    "salesians": ["salesian", "salesianity"],
+    "oratory": ["oratories", "oratorian"],
+    "biography": ["biographical", "biographic", "biographies"],
+    "biographical": ["biography", "biographic"],
+    "history": ["historical", "historic", "histories"],
+    "historical": ["history", "historic"],
+    "historic": ["history", "historical"],
+    "youth": ["young", "youthful"],
+    "young": ["youth", "youthful"],
+    "church": ["churches", "ecclesiastical"],
+    "saint": ["saints", "saintly", "sainthood"],
+    "saints": ["saint", "saintly"],
+    "priest": ["priestly", "priesthood", "priests"],
+    "bishop": ["bishops", "episcopal"],
+    "episcopal": ["bishop", "bishops"],
+    "charity": ["charitable", "charities"],
+    "charitable": ["charity", "charities"],
+    "formation": ["formative", "forming"],
+    "congregation": ["congregational", "congregations"],
+    "constitution": ["constitutional", "constitutions"],
+    "constitutional": ["constitution", "constitutions"],
+    "letter": ["letters", "correspondence", "epistolary"],
+    "letters": ["letter", "correspondence", "epistolary"],
+    "regulation": ["regulations", "regulatory", "rules"],
+    "regulations": ["regulation", "regulatory", "rules"],
+    "dream": ["dreams", "dreaming"],
+    "dreams": ["dream", "dreaming"],
+    "conference": ["conferences"],
+    "conferences": ["conference"],
+    "boy": ["boys", "youth", "young"],
+    "boys": ["boy", "youth", "young"],
+    "school": ["schools", "scholastic", "schooling"],
+    "schools": ["school", "scholastic"],
+    "college": ["colleges", "collegiate"],
+    "colleges": ["college", "collegiate"],
+}
+
+
+# ============================================================
 # TOKEN-BASED MATCHING
 # ============================================================
 def tokenize(text):
@@ -473,33 +550,76 @@ def stem_token(token):
         return token[:-2]
     if token.endswith('ed') and len(token) > 4:
         return token[:-2]
-    if token.endswith('ly') and len(token) > 4:
+    if token.endswith('ly') and len(token) > 5:
         return token[:-2]
     if token.endswith('s') and not token.endswith('ss') and len(token) > 4:
         return token[:-1]
     return token
 
 
+def shares_root(word1, word2, min_prefix=5):
+    """Check if two words share a common root (prefix of at least min_prefix chars).
+    Also requires the shared prefix to be at least 55% of the shorter word.
+    
+    Examples:
+      - "catechism" / "catechesis" → share "catech" (6 chars, 67%) ✓
+      - "educational" / "educator" → share "educat" (6 chars, 86%) ✓
+      - "sale" / "salesian" → share "sale" (4 chars) < 5 ✗
+    """
+    if len(word1) < min_prefix or len(word2) < min_prefix:
+        return False
+    common = 0
+    for c1, c2 in zip(word1, word2):
+        if c1 == c2:
+            common += 1
+        else:
+            break
+    shorter = min(len(word1), len(word2))
+    return common >= min_prefix and common >= shorter * 0.55
+
+
 def token_matches(keyword, tokens):
-    """Check if a keyword matches any token using stemming and prefix matching.
-    Avoids broad substring false positives (e.g. 'sale' matching 'salesians' only
-    if 'sale' is >= 4 chars and is a prefix or stem match).
+    """Check if a keyword matches any token using stemming, prefix, root, and semantic matching.
+    
+    Matching levels (in order of priority):
+    1. Exact match
+    2. Stem match (lightweight suffix removal)
+    3. Prefix match (keyword is prefix of token or vice versa, >= 4 chars)
+    4. Fuzzy root match (shared prefix >= 5 chars and >= 55% of shorter word)
+    5. Semantic expansion (dictionary of related terms, synonyms, variations)
     """
     keyword_stem = stem_token(keyword)
 
     for token in tokens:
-        # Exact match
+        # 1. Exact match
         if keyword == token:
             return True
-        # Stem match
+        # 2. Stem match
         if keyword_stem == stem_token(token):
             return True
-        # Prefix match (keyword is prefix of token) - only for keywords >= 4 chars
+        # 3. Prefix match (keyword is prefix of token) - only for keywords >= 4 chars
         if len(keyword) >= 4 and token.startswith(keyword):
             return True
-        # Token is prefix of keyword
+        # 3b. Token is prefix of keyword
         if len(token) >= 4 and keyword.startswith(token):
             return True
+        # 4. Fuzzy root match (handles morphological variations like catechism/catechesis)
+        if shares_root(keyword, token):
+            return True
+
+    # 5. Semantic expansion: check if any synonym/related term of the keyword matches
+    expansions = SEMANTIC_EXPANSIONS.get(keyword, [])
+    for expanded in expansions:
+        expanded_stem = stem_token(expanded)
+        for token in tokens:
+            if expanded == token:
+                return True
+            if expanded_stem == stem_token(token):
+                return True
+            if len(expanded) >= 4 and token.startswith(expanded):
+                return True
+            if len(token) >= 4 and expanded.startswith(token):
+                return True
 
     return False
 
@@ -833,9 +953,23 @@ def retrieve_context(query, media_filter="All"):
             exact_matches.sort(key=lambda d: d.get("score", 0), reverse=True)
             return exact_matches
 
-        # For language queries, Tier 1 result is definitive - do NOT fall through
-        # to Tier 2 (which would match "french"/"italian" as content keywords)
+        # For language queries that returned 0 results: the language doesn't exist
+        # in the index. Fall back to treating the term as a CONTENT keyword so
+        # semantic expansion can match related terms (e.g. "Italian" → "Italy").
         if lang_code:
+            # Language not found in index — fall back to CONTENT keyword matching.
+            # This allows "Italian" to match docs with country="Italy" via semantic expansion.
+            query_as_keywords = extract_keywords(query)
+            if query_as_keywords:
+                content_matches = []
+                for doc in all_candidates:
+                    searchable_text = build_searchable_text(doc)
+                    tokens = tokenize(searchable_text)
+                    if all(token_matches(kw, tokens) for kw in query_as_keywords):
+                        content_matches.append(doc)
+                if content_matches:
+                    content_matches.sort(key=lambda d: d.get("score", 0), reverse=True)
+                    return content_matches
             return []
 
         # --- Tier 2: Semantic similarity fallback ---
@@ -994,7 +1128,9 @@ def format_sources(docs):
     sources_md = f"**{len(docs)} Matched Document(s):**\n\n---\n\n"
     for i, doc in enumerate(docs, 1):
         work_type = doc.get("work_type") or ""
-        language = doc.get("language") or ""
+        language_code = doc.get("language") or ""
+        # Map language code to full name (e.g. "En" → "English")
+        language_full = LANGUAGE_NAMES.get(language_code.upper(), language_code) or "N/A"
         title_display = doc.get("title") or doc.get("file_name") or "Unknown"
         score = doc.get("score", 0)
 
@@ -1003,7 +1139,7 @@ def format_sources(docs):
 
         # Metadata block
         sources_md += f"\u2022 Relevance: `{score:.0%}`\n\n"
-        sources_md += f"\u2022 Language: {language or 'N/A'}\n\n"
+        sources_md += f"\u2022 Language: {language_full}\n\n"
         sources_md += f"\u2022 Type: {work_type or 'N/A'}\n\n"
         if doc.get("knowledge_area"):
             sources_md += f"\u2022 Area: {doc['knowledge_area']}\n\n"
@@ -1673,48 +1809,6 @@ _SOURCES_PLACEHOLDER = (
     "*Sources will appear here after your query...*"
 )
 
-# Enter in the search field must click the real Gradio submit button (elem_id on <button>).
-# Gradio's Textbox.submit() is unreliable when mounted under FastAPI at /rag; this is the fallback.
-_SEARCH_ENTER_HEAD = """
-<script>
-(function () {
-  function searchField() {
-    var block = document.getElementById("gsdp-search-query");
-    if (block) {
-      return block.querySelector(
-        'input[data-testid="textbox"], textarea[data-testid="textbox"], input[type="text"], textarea'
-      );
-    }
-    var card = document.querySelector(".search-card");
-    return card
-      ? card.querySelector(
-          'input[data-testid="textbox"], textarea[data-testid="textbox"], input[type="text"], textarea'
-        )
-      : null;
-  }
-
-  function submitButton() {
-    return document.getElementById("gsdp-search-submit");
-  }
-
-  function onEnterKey(e) {
-    if (e.key !== "Enter" || e.shiftKey) return;
-    var field = searchField();
-    if (!field || e.target !== field) return;
-    var btn = submitButton();
-    if (!btn || btn.disabled) return;
-    e.preventDefault();
-    e.stopPropagation();
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-    field.dispatchEvent(new Event("change", { bubbles: true }));
-    window.setTimeout(function () { btn.click(); }, 50);
-  }
-
-  document.addEventListener("keydown", onEnterKey, true);
-})();
-</script>
-"""
-
 
 def create_app():
     """Build the Gradio application (GSDP Semantic Search reference UI)."""
@@ -1722,7 +1816,23 @@ def create_app():
 
     with gr.Blocks(
         css=CUSTOM_CSS,
-        head=_SEARCH_ENTER_HEAD,
+        js="""() => {
+            // Paste helper: sync pasted value to Gradio's state immediately.
+            // Enter key is handled natively by Gradio's query_input.submit() event
+            // (works because lines=1, max_lines=1 renders a single-line <input>).
+            document.addEventListener('paste', function(e) {
+                var target = e.target;
+                if (!target) return;
+                var inSearch = target.closest('.search-card');
+                var isInput = (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT');
+                if (inSearch && isInput) {
+                    setTimeout(function() {
+                        target.dispatchEvent(new Event('input', {bubbles: true}));
+                        target.dispatchEvent(new Event('change', {bubbles: true}));
+                    }, 50);
+                }
+            }, true);
+        }""",
         fill_width=True,
         title="GSDP Semantic Search",
         theme=gr.themes.Base(
@@ -1766,15 +1876,12 @@ def create_app():
                 ),
                 lines=1,
                 max_lines=1,
-                elem_id="gsdp-search-query",
-                html_attributes=InputHTMLAttributes(enterkeyhint="search"),
             )
             with gr.Row(elem_classes="search-actions"):
                 submit_btn = gr.Button(
                     "\u2728 Search & Analyze",
                     variant="primary",
                     elem_classes="btn-primary",
-                    elem_id="gsdp-search-submit",
                     scale=3,
                 )
                 clear_btn = gr.Button(
@@ -1849,25 +1956,26 @@ def create_app():
         )
 
         # Event handlers: show full-page loader → run search → hide loader
-        def _show_search_loader():
-            return gr.update(visible=True)
-
-        def _hide_search_loader():
-            return gr.update(visible=False)
-
-        # Single pipeline for button click, native Textbox submit, and Enter (via head script).
-        gr.on(
-            triggers=[submit_btn.click, query_input.submit],
-            fn=_show_search_loader,
+        submit_btn.click(
+            fn=lambda: gr.update(visible=True),
             outputs=[loading_overlay],
-            show_progress="hidden",
-            trigger_mode="multiple",
         ).then(
             fn=chat,
             inputs=[query_input, media_filter],
             outputs=[answer_output, sources_output],
         ).then(
-            fn=_hide_search_loader,
+            fn=lambda: gr.update(visible=False),
+            outputs=[loading_overlay],
+        )
+        query_input.submit(
+            fn=lambda: gr.update(visible=True),
+            outputs=[loading_overlay],
+        ).then(
+            fn=chat,
+            inputs=[query_input, media_filter],
+            outputs=[answer_output, sources_output],
+        ).then(
+            fn=lambda: gr.update(visible=False),
             outputs=[loading_overlay],
         )
         lang_radio.change(

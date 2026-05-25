@@ -1,5 +1,11 @@
 import { ANALYTICS_PROVINCE_DATA } from '../data/analyticsProvinceData'
-import { isUsableDynamicSlideImage } from '../data/homeStaticImages'
+import {
+  isBlockedHomeImage,
+  isUsableDynamicSlideImage,
+  staticHeroImageAt,
+  staticHeroSlideMetaAt,
+  staticPanelThumbAt,
+} from '../data/homeStaticImages'
 
 /** Base URL for backend (e.g. `VITE_API_BASE_URL` in `.env.development`). */
 // export function apiBase() {
@@ -735,7 +741,16 @@ export function buildRecentPdfResourcesFromOntologyRows(rows, { limit = 4 } = {}
     })
     .sort((a, b) => b.t - a.t)
 
-  return dated.slice(0, limit).map((x, i) => mapOntologyRowToResource(x.row, i))
+  return dated.slice(0, limit).map((x, i) => {
+    const r = mapOntologyRowToResource(x.row, i)
+    const thumb = resolveHomePanelThumb(x.row, i)
+    return { ...r, thumb: thumb.url, thumbPos: thumb.pos, thumbAlt: thumb.alt || r.title }
+  })
+}
+
+/** Thumbnail for trending / resource cards — curated clear photos only. */
+export function resolveHomePanelThumb(_row, index = 0) {
+  return staticPanelThumbAt(index)
 }
 
 /** Kind for filter + display (uses docKind from API map when present). */
@@ -1134,7 +1149,7 @@ function truncateStr(s, max) {
 
 const HERO_SLIDE_CLS = ['hp-s1', 'hp-s2', 'hp-s3']
 
-/** Best image URL for hero slider (corpus photo or archive header link). */
+/** Best image URL for hero slider — only clear, non-blocked corpus photos. */
 export function pickHeroSlideImageUrl(row) {
   if (!row || typeof row !== 'object') return null
   const candidates = []
@@ -1145,10 +1160,8 @@ export function pickHeroSlideImageUrl(row) {
   const docUrl = pickDocumentUrlFromOntologyRow(row)
   if (docUrl) candidates.push(docUrl)
   for (const u of candidates) {
+    if (isBlockedHomeImage(u)) continue
     if (isUsableDynamicSlideImage(u)) return u
-  }
-  for (const u of candidates) {
-    if (/archive\.sdb\.org\/images?\//i.test(u)) return u
   }
   return null
 }
@@ -1210,8 +1223,8 @@ export function buildHeroSlidesFromOntologyRows(rows, { maxSlides = 6 } = {}) {
     out.push({
       key: res.id,
       cls: HERO_SLIDE_CLS[out.length % HERO_SLIDE_CLS.length],
-      bg,
-      bgPos: 'center center',
+      bg: bg || staticHeroImageAt(out.length),
+      bgPos: staticHeroSlideMetaAt(out.length)?.bgPos || 'center center',
       coverCss: bg ? undefined : res.cover,
       label: label || 'Resource library',
       title: titleText,
@@ -1232,26 +1245,40 @@ export function buildNewsItemsFromOntologyRows(_rows, { skip: _skip = 0, limit: 
   return []
 }
 
-/** Trending-style lines from repeated tags/keywords in recent rows. */
+/** Trending-style lines from repeated tags/keywords in recent rows (with thumbnails). */
 export function buildTrendingFromOntologyRows(rows, { limit = 4 } = {}) {
   if (!Array.isArray(rows) || !rows.length) return []
-  const counts = new Map()
+  const byTag = new Map()
   for (const row of rows) {
     const res = mapOntologyRowToResource(row, 0)
     for (const t of res.tags || []) {
       const k = String(t).trim()
       if (k.length < 4 || k.length > 42) continue
-      counts.set(k, (counts.get(k) || 0) + 1)
+      const prev = byTag.get(k) || { count: 0, row: null, hasImg: false }
+      const img = pickHeroSlideImageUrl(row)
+      const rowPick =
+        img && (!prev.hasImg || !prev.row) ? row : !prev.row ? row : prev.row
+      byTag.set(k, {
+        count: prev.count + 1,
+        row: rowPick,
+        hasImg: prev.hasImg || Boolean(img),
+      })
     }
   }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
+  return [...byTag.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
     .slice(0, limit)
-    .map(([q, count]) => ({
-      q,
-      ct: String(count),
-      up: false,
-    }))
+    .map(([q, { count, row }], i) => {
+      const thumb = resolveHomePanelThumb(row, i)
+      return {
+        q,
+        ct: String(count),
+        up: false,
+        thumb: thumb.url,
+        thumbPos: thumb.pos,
+        thumbAlt: thumb.alt || q,
+      }
+    })
 }
 
 /** Curated-style collection cards grouped by source category / knowledge area. */
