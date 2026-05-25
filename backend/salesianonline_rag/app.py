@@ -34,6 +34,7 @@ import re
 import requests as http_requests
 import gradio as gr
 from fastapi import FastAPI
+from gradio.components.textbox import InputHTMLAttributes
 
 # ============================================================
 # CONFIGURATION
@@ -402,6 +403,44 @@ def is_publication_year_query(query, keywords):
     return None
 
 
+# Words that indicate the user is asking about publication year as a concept
+YEAR_QUERY_INDICATORS = {"year", "published", "publication", "date"}
+
+
+def is_generic_year_query(query, keywords):
+    """Detect if query is asking about publication years WITHOUT specifying a specific year.
+
+    Examples that match:
+      - "published year"
+      - "year of published"
+      - "publication year"
+      - "year of publication"
+
+    These queries should return ALL documents grouped by their publication_year values.
+    Returns True if the query is purely about the concept of publication year.
+    """
+    if not keywords:
+        return False
+    # If a specific year (4-digit number) is present, this is NOT a generic query
+    has_specific_year = any(w.isdigit() and len(w) == 4 for w in keywords)
+    if has_specific_year:
+        return False
+    # Check if ALL keywords are year-related intent words
+    all_year_related = all(w in YEAR_QUERY_INDICATORS for w in keywords)
+    if all_year_related and len(keywords) >= 1:
+        return True
+    # Also check the raw query for common phrasings
+    query_lower = query.lower().strip()
+    generic_patterns = [
+        "published year", "year of published", "publication year",
+        "year of publication", "publishing year", "year published"
+    ]
+    for pattern in generic_patterns:
+        if pattern in query_lower:
+            return True
+    return False
+
+
 def is_full_sentence_query(query, keywords):
     """Detect if query is a natural language question (5+ words or contains '?')."""
     if '?' in query:
@@ -731,7 +770,7 @@ def retrieve_context(query, media_filter="All"):
         search_kwargs = {
             "query_text": query,
             "columns": FETCH_COLUMNS,
-            "num_results": 1000
+            "num_results": 100
         }
 
         # Apply media type filter from dropdown
@@ -750,7 +789,8 @@ def retrieve_context(query, media_filter="All"):
         # similarity but the publication_year field match is what matters.
         lang_code = is_language_query(query, keywords)
         pub_year_keywords = is_publication_year_query(query, keywords)
-        if lang_code or pub_year_keywords or year_ranges:
+        generic_year = is_generic_year_query(query, keywords)
+        if lang_code or pub_year_keywords or year_ranges or generic_year:
             effective_threshold = 0.01
         else:
             effective_threshold = SIMILARITY_THRESHOLD
@@ -766,6 +806,14 @@ def retrieve_context(query, media_filter="All"):
                 continue
             doc = build_document(row)
             all_candidates.append(doc)
+
+        # --- Generic year query: return ALL documents grouped by publication year ---
+        if generic_year:
+            year_docs = [doc for doc in all_candidates if doc.get("publication_year")]
+            if year_docs:
+                year_docs.sort(key=lambda d: (d.get("publication_year", ""), d.get("score", 0)), reverse=True)
+                return year_docs
+            return []
 
         # --- Tier 1: Exact keyword matching ---
         # Check for exact title match first (highest priority)
@@ -816,15 +864,26 @@ def generate_answer(query, context_docs, language_pref="English"):
     The system prompt explicitly tells the LLM that documents were PRE-FILTERED
     by the retrieval system, so the LLM should trust the results and not
     second-guess the filtering logic.
+    
+    Performance: Caps context to 20 documents for LLM (full list still shown in sources).
+    Abstracts are truncated to 300 chars to reduce token count and speed up response.
     """
+    # Cap documents sent to LLM for faster response (sources panel still shows all)
+    MAX_LLM_DOCS = 20
+    llm_docs = context_docs[:MAX_LLM_DOCS]
+    
     context_parts = []
-    for i, doc in enumerate(context_docs, 1):
+    for i, doc in enumerate(llm_docs, 1):
         if "error" in doc:
             continue
         icon = MEDIA_ICONS.get(doc.get("work_type", "").lower(), "")
         title_display = doc.get("title") or doc.get("file_name") or "Unknown"
         pub_year = doc.get("publication_year") or "N/A"
         contributor = clean_contributor(doc.get("contributor", "")).title() or "N/A"
+        # Truncate abstract to reduce token count and speed up LLM
+        abstract = doc.get("abstract", "")
+        if len(abstract) > 300:
+            abstract = abstract[:300] + "..."
         context_parts.append(
             f"--- Source {i}: {icon} {title_display} ---\n"
             f"Type: {doc.get('work_type') or 'N/A'} | "
@@ -833,13 +892,16 @@ def generate_answer(query, context_docs, language_pref="English"):
             f"Contributor: {contributor} | "
             f"Country: {doc.get('country') or 'N/A'} | "
             f"Knowledge Area: {doc.get('knowledge_area') or 'N/A'}\n"
-            f"Abstract: {doc.get('abstract', '')}")
+            f"Abstract: {abstract}")
     context_text = "\n\n".join(context_parts)
 
     # Determine query type for targeted instructions
     query_lower = query.lower().strip()
     is_year_query = bool(re.match(r'^\d{4}$', query_lower))
     is_listing_query = any(w in query_lower for w in ["list", "show", "display", "give me", "all"])
+    # Detect generic year query (e.g. "published year", "year of published")
+    query_keywords_for_detect = extract_keywords(query)
+    is_generic_year = is_generic_year_query(query, query_keywords_for_detect)
 
     system_prompt = f"""You are a knowledgeable assistant for the Salesian Online educational platform.
 You answer questions about Salesian educational content based ONLY on the retrieved documents provided below.
@@ -865,7 +927,24 @@ RESPONSE FORMAT:
 """
 
     # Tailor the user message based on query type
-    if is_year_query:
+    if is_generic_year:
+        # Group documents by year for the prompt
+        year_groups = {}
+        for doc in context_docs:
+            yr = doc.get("publication_year") or "Unknown"
+            year_groups.setdefault(yr, []).append(doc.get("title") or doc.get("file_name") or "Unknown")
+        year_summary = ", ".join(f"{yr} ({len(titles)} docs)" for yr, titles in sorted(year_groups.items(), reverse=True))
+        user_message = f"""The user asked: \"{query}\"
+
+The retrieval system found {len(context_docs)} documents across these publication years: {year_summary}.
+
+List ALL documents grouped by their publication year. For each year, show:
+- The year as a heading
+- A numbered list of all documents in that year with their title, type, language, and contributor
+
+**Retrieved Documents (grouped by publication year):**
+{context_text}"""
+    elif is_year_query:
         user_message = f"""The user searched for: "{query}"
 
 The retrieval system found {len(context_docs)} documents published in {query}.
@@ -897,7 +976,7 @@ Provide a comprehensive answer based on the document content."""
             model=LLM_ENDPOINT,
             messages=[{"role": "system", "content": system_prompt},
                      {"role": "user", "content": user_message}],
-            max_tokens=2048, temperature=0.2
+            max_tokens=1500, temperature=0.2
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -962,11 +1041,19 @@ def chat(message, media_filter):
 
     # If no documents pass either tier
     if not docs:
-        return (
-            "**\u274C No relevant documents found.**\n\n"
-            "The search term does not match any content in the knowledge base. "
-            "Please try a different query or check for typos."
-        ), ""
+        no_results_answer = (
+            "**\U0001F50D No matching results for your query.**\n\n"
+            "We couldn\u2019t find any documents that match your search in the Salesian knowledge base.\n\n"
+            "**Suggestions:**\n"
+            "- Try using different or broader keywords\n"
+            "- Check for spelling errors\n"
+        )
+        no_results_sources = (
+            "**\U0001F4AD No sources retrieved**\n\n---\n\n"
+            "Your query did not match any documents in the current index.\n\n"
+            "*Try a new search to explore the collection.*"
+        )
+        return no_results_answer, no_results_sources
 
     answer = generate_answer(message, docs, language_pref="English")
     sources = format_sources(docs)
@@ -1191,6 +1278,8 @@ html, body {
     border-radius: var(--radius-md) !important;
     box-shadow: 0 2px 10px rgba(8, 28, 56, 0.08) !important;
     min-height: 3.25rem !important;
+    height: 3.25rem !important;
+    padding: 0.75rem 1rem !important;
 }
 .search-card textarea:focus {
     border-color: var(--blue-600) !important;
@@ -1584,6 +1673,48 @@ _SOURCES_PLACEHOLDER = (
     "*Sources will appear here after your query...*"
 )
 
+# Enter in the search field must click the real Gradio submit button (elem_id on <button>).
+# Gradio's Textbox.submit() is unreliable when mounted under FastAPI at /rag; this is the fallback.
+_SEARCH_ENTER_HEAD = """
+<script>
+(function () {
+  function searchField() {
+    var block = document.getElementById("gsdp-search-query");
+    if (block) {
+      return block.querySelector(
+        'input[data-testid="textbox"], textarea[data-testid="textbox"], input[type="text"], textarea'
+      );
+    }
+    var card = document.querySelector(".search-card");
+    return card
+      ? card.querySelector(
+          'input[data-testid="textbox"], textarea[data-testid="textbox"], input[type="text"], textarea'
+        )
+      : null;
+  }
+
+  function submitButton() {
+    return document.getElementById("gsdp-search-submit");
+  }
+
+  function onEnterKey(e) {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    var field = searchField();
+    if (!field || e.target !== field) return;
+    var btn = submitButton();
+    if (!btn || btn.disabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    window.setTimeout(function () { btn.click(); }, 50);
+  }
+
+  document.addEventListener("keydown", onEnterKey, true);
+})();
+</script>
+"""
+
 
 def create_app():
     """Build the Gradio application (GSDP Semantic Search reference UI)."""
@@ -1591,6 +1722,7 @@ def create_app():
 
     with gr.Blocks(
         css=CUSTOM_CSS,
+        head=_SEARCH_ENTER_HEAD,
         fill_width=True,
         title="GSDP Semantic Search",
         theme=gr.themes.Base(
@@ -1633,13 +1765,16 @@ def create_app():
                     "System methodology?"
                 ),
                 lines=1,
-                max_lines=4,
+                max_lines=1,
+                elem_id="gsdp-search-query",
+                html_attributes=InputHTMLAttributes(enterkeyhint="search"),
             )
             with gr.Row(elem_classes="search-actions"):
                 submit_btn = gr.Button(
                     "\u2728 Search & Analyze",
                     variant="primary",
                     elem_classes="btn-primary",
+                    elem_id="gsdp-search-submit",
                     scale=3,
                 )
                 clear_btn = gr.Button(
@@ -1714,26 +1849,25 @@ def create_app():
         )
 
         # Event handlers: show full-page loader → run search → hide loader
-        submit_btn.click(
-            fn=lambda: gr.update(visible=True),
+        def _show_search_loader():
+            return gr.update(visible=True)
+
+        def _hide_search_loader():
+            return gr.update(visible=False)
+
+        # Single pipeline for button click, native Textbox submit, and Enter (via head script).
+        gr.on(
+            triggers=[submit_btn.click, query_input.submit],
+            fn=_show_search_loader,
             outputs=[loading_overlay],
+            show_progress="hidden",
+            trigger_mode="multiple",
         ).then(
             fn=chat,
             inputs=[query_input, media_filter],
             outputs=[answer_output, sources_output],
         ).then(
-            fn=lambda: gr.update(visible=False),
-            outputs=[loading_overlay],
-        )
-        query_input.submit(
-            fn=lambda: gr.update(visible=True),
-            outputs=[loading_overlay],
-        ).then(
-            fn=chat,
-            inputs=[query_input, media_filter],
-            outputs=[answer_output, sources_output],
-        ).then(
-            fn=lambda: gr.update(visible=False),
+            fn=_hide_search_loader,
             outputs=[loading_overlay],
         )
         lang_radio.change(

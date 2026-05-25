@@ -9,6 +9,9 @@ from database.databricks import (
     query_ontology_table,
     query_resource_excel_table,
     query_salesianonline_final_table,
+    query_vector_db_input_facets,
+    query_vector_db_input_summary,
+    query_vector_db_input_table,
 )
 
 
@@ -87,6 +90,94 @@ def get_salesianonline_final_data(
     """
     try:
         result = query_salesianonline_final_table(limit=limit, offset=offset, search=q)
+        return {
+            "status": "success",
+            "count": len(result["data"]),
+            "total": result["total"],
+            "limit": limit,
+            "offset": offset,
+            "data": result["data"],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/vector-db-input/summary")
+def get_vector_db_input_summary():
+    """Totals and distinct dimension counts from gsdp.gold.vector_db_input."""
+    try:
+        summary = query_vector_db_input_summary()
+        return {"status": "success", **summary}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/vector-db-input/facets")
+def get_vector_db_input_facets():
+    """Distinct values for Resource Library filter dropdowns."""
+    try:
+        facets = query_vector_db_input_facets()
+        return {"status": "success", **facets}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/vector-db-input")
+def get_vector_db_input_data(
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[
+        Optional[str],
+        Query(
+            max_length=200,
+            description="Search subject, title, abstract, contributor, document_id, language, etc.",
+        ),
+    ] = None,
+    knowledge_area: Annotated[Optional[str], Query(max_length=200)] = None,
+    work_type: Annotated[Optional[str], Query(max_length=200)] = None,
+    language: Annotated[Optional[str], Query(max_length=200)] = None,
+    country: Annotated[Optional[str], Query(max_length=200)] = None,
+    region: Annotated[Optional[str], Query(max_length=200)] = None,
+    publication_year: Annotated[
+        Optional[int],
+        Query(ge=0, le=9999, description="Exact match on publication_year."),
+    ] = None,
+    reference_year: Annotated[
+        Optional[int],
+        Query(
+            ge=0,
+            le=9999,
+            description="Filter rows whose reference_start_year–reference_end_year range includes this year.",
+        ),
+    ] = None,
+    salesian_family_group: Annotated[Optional[str], Query(max_length=200)] = None,
+    contributor: Annotated[Optional[str], Query(max_length=200)] = None,
+    doc_media: Annotated[Optional[str], Query(max_length=20, pattern="^(pdf|image)$")] = None,
+):
+    """
+    Paginated rows from `gsdp.gold.vector_db_input` (vector / RAG corpus metadata).
+    Override table with env `DATABRICKS_VECTOR_DB_INPUT_TABLE` if needed.
+    """
+    filters = {
+        k: v
+        for k, v in {
+            "knowledge_area": knowledge_area,
+            "work_type": work_type,
+            "language": language,
+            "country": country,
+            "region": region,
+            "reference_year": reference_year,
+            "publication_year": publication_year,
+            "salesian_family_group": salesian_family_group,
+            "contributor": contributor,
+            "doc_media": doc_media,
+        }.items()
+        if v is not None and (v != "" if isinstance(v, str) else True)
+    }
+    try:
+        result = query_vector_db_input_table(
+            limit=limit, offset=offset, search=q, filters=filters or None
+        )
         return {
             "status": "success",
             "count": len(result["data"]),

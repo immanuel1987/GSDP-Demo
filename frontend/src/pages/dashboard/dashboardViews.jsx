@@ -9,8 +9,6 @@ import { clearRoleAllowedPagesOverride, fetchAuthRoles, updateRoleAllowedPages }
 import {
   buildAnalyticsKnowledgeNetworkBars,
   buildAnalyticsProvinceRollupFromOntologyRows,
-  buildDashboardCollectionTiles,
-  buildDashboardEventsFromOntologyRows,
   buildDashboardInstitutionsFromOntologyRows,
   buildDashboardPersonsFromOntologyRows,
   buildNetworkKpisFromOntologyRows,
@@ -20,8 +18,21 @@ import {
   fetchOntologyRows,
   fetchOntologySummary,
   fetchSalesianonlineFinalRows,
+  fetchVectorDbInputFacets,
+  resourceFacetValues,
+  resourceFiltersToApiParams,
+  resourceMatchesReferenceYear,
+  resourceMatchesPublicationYear,
+  corpusFilterAllLabel,
+  corpusFilterAriaLabel,
+  corpusFilterFacetKey,
+  englishCountryDisplayName,
+  formatDisplayValue,
+  formatLanguageDisplay,
   formatOntologyCellForDisplay,
   formatOntologyFreshness,
+  formatDateTimeDisplay,
+  languageSelectOptions,
   mapOntologyRowToResource,
   pickSalesianonlineOpenUrl,
   pickSalesianonlineThumbnailUrl,
@@ -29,9 +40,7 @@ import {
   resourceDocumentUrl,
 } from '../../lib/ontologyApi'
 import {
-  COLLECTION_CHIPS,
   DASHBOARD_RESOURCES,
-  INSTITUTION_TYPE_OPTIONS,
   RESOURCE_AUTHORS,
   RESOURCE_GROUP_OPTIONS,
   RESOURCE_LANG_OPTIONS,
@@ -143,7 +152,7 @@ export function ResourceDetailModal({ resource, onClose }) {
             {fields.map(f => (
               <div key={f.label} className="border-b border-off-white pb-2">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-mid">{f.label}</div>
-                <div className="mt-0.5 text-sm text-ink">{f.value}</div>
+                <div className="mt-0.5 text-sm text-ink">{formatDisplayValue(f.value) ?? f.value}</div>
               </div>
             ))}
           </div>
@@ -195,8 +204,15 @@ function filterResources(list, f) {
     if (f.type && r.type !== f.type) return false
     if (f.province && r.province !== f.province) return false
     if (f.region && r.region !== f.region) return false
-    if (f.lang && !r.lang.includes(f.lang)) return false
-    if (f.year && r.year !== f.year) return false
+    if (f.lang) {
+      const filterLang = formatLanguageDisplay(f.lang)
+      const rowLang = formatLanguageDisplay(r.lang)
+      if (!rowLang.includes(filterLang) && !String(r.lang || '').toLowerCase().includes(String(f.lang).toLowerCase())) {
+        return false
+      }
+    }
+    if (f.year && !resourceMatchesReferenceYear(r, f.year)) return false
+    if (f.pubYear && !resourceMatchesPublicationYear(r, f.pubYear)) return false
     if (f.access === 'open' && r.access !== 'open') return false
     if (f.group && r.group !== f.group) return false
     if (f.publisher && r.publisher !== f.publisher) return false
@@ -208,6 +224,10 @@ function filterResources(list, f) {
 }
 
 const SO_LIBRARY_PAGE = 36
+const PLATFORM_LIBRARY_PAGE = 200
+const COLLECTIONS_PAGE = 200
+const PASTORAL_PAGE = 200
+const NETWORKS_PAGE = 300
 
 function filterSalesianonlineRows(rows, f) {
   if (!Array.isArray(rows)) return []
@@ -236,6 +256,7 @@ export function ResourcesView() {
     region: '',
     lang: '',
     year: '',
+    pubYear: '',
     access: '',
     group: '',
     publisher: '',
@@ -255,12 +276,46 @@ export function ResourcesView() {
   const [soRows, setSoRows] = useState([])
   const [soTotal, setSoTotal] = useState(null)
   const [soOffset, setSoOffset] = useState(0)
+  const [apiOffset, setApiOffset] = useState(0)
   const [debouncedQ, setDebouncedQ] = useState('')
+  const [debouncedApiFilters, setDebouncedApiFilters] = useState(() => resourceFiltersToApiParams(f))
+  const [facetOptions, setFacetOptions] = useState(null)
+  const [facetsLoading, setFacetsLoading] = useState(false)
 
   useEffect(() => {
     const id = window.setTimeout(() => setDebouncedQ(f.q.trim()), 450)
     return () => window.clearTimeout(id)
   }, [f.q])
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedApiFilters(resourceFiltersToApiParams(f)), 450)
+    return () => window.clearTimeout(id)
+  }, [f.theme, f.type, f.province, f.region, f.lang, f.year, f.pubYear, f.group, f.author, f.docMedia])
+
+  useEffect(() => {
+    if (useStaticFallback) {
+      setFacetsLoading(false)
+      return
+    }
+    let cancelled = false
+    setFacetsLoading(true)
+    fetchVectorDbInputFacets()
+      .then((res) => {
+        if (!cancelled) {
+          setFacetOptions(res)
+          setFacetsLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFacetOptions({})
+          setFacetsLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [useStaticFallback])
 
   useEffect(() => {
     const s = getSession()
@@ -269,15 +324,18 @@ export function ResourcesView() {
     if (!reg) return
     setF((prev) => {
       if (prev.region) return prev
-      const opts = RESOURCE_REGION_OPTIONS.filter(Boolean)
+      const opts =
+        resourceFacetValues(facetOptions, 'continents', RESOURCE_REGION_OPTIONS, false) ||
+        RESOURCE_REGION_OPTIONS.filter(Boolean)
       if (opts.length && !opts.includes(reg)) return prev
       return { ...prev, region: reg }
     })
-  }, [])
+  }, [facetOptions])
 
   useEffect(() => {
     setSoOffset(0)
-  }, [debouncedQ, librarySource])
+    setApiOffset(0)
+  }, [debouncedQ, debouncedApiFilters, librarySource])
 
   useEffect(() => {
     if (useStaticFallback && librarySource === 'salesianonline') {
@@ -290,7 +348,12 @@ export function ResourcesView() {
     let cancelled = false
     setApiLoading(true)
     setApiError(null)
-    fetchOntologyRows({ limit: 200, offset: 0, q: debouncedQ })
+    fetchOntologyRows({
+      limit: PLATFORM_LIBRARY_PAGE,
+      offset: apiOffset,
+      q: debouncedQ,
+      filters: debouncedApiFilters,
+    })
       .then((res) => {
         if (cancelled) return
         const mapped = (res.data || []).map((row, i) => mapOntologyRowToResource(row, i))
@@ -308,7 +371,7 @@ export function ResourcesView() {
     return () => {
       cancelled = true
     }
-  }, [debouncedQ, useStaticFallback, librarySource])
+  }, [debouncedQ, debouncedApiFilters, apiOffset, useStaticFallback, librarySource])
 
   useEffect(() => {
     if (useStaticFallback || librarySource !== 'salesianonline') return
@@ -336,10 +399,74 @@ export function ResourcesView() {
 
   const sourceList = useStaticFallback ? DASHBOARD_RESOURCES : apiRows
 
-  const filtered = useMemo(
-    () => filterResources(sourceList, useStaticFallback ? f : { ...f, q: '' }),
-    [sourceList, f, useStaticFallback],
-  )
+  const themeOptions =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('knowledge_area'),
+      RESOURCE_THEME_OPTIONS.filter(Boolean),
+      useStaticFallback,
+    ) ?? []
+  const typeOptions =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('work_type'),
+      RESOURCE_TYPE_OPTIONS.filter(Boolean),
+      useStaticFallback,
+    ) ?? []
+  const countryOptions = useStaticFallback
+    ? RESOURCE_PROVINCE_OPTIONS.filter((o) => o.value).map((o) => o.value)
+    : resourceFacetValues(facetOptions, corpusFilterFacetKey('country'), [], false) ?? []
+  const regionOptions =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('region'),
+      RESOURCE_REGION_OPTIONS.filter(Boolean),
+      useStaticFallback,
+    ) ?? []
+  const langRaw =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('language'),
+      RESOURCE_LANG_OPTIONS.filter(Boolean),
+      useStaticFallback,
+    ) ?? []
+  const langOptions = useStaticFallback
+    ? langRaw.map((l) => ({ value: l, label: l || corpusFilterAllLabel('language') }))
+    : languageSelectOptions(langRaw)
+  const yearOptions =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('reference_year'),
+      RESOURCE_YEAR_OPTIONS.filter(Boolean),
+      useStaticFallback,
+    ) ?? []
+  const pubYearOptions =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('publication_year'),
+      RESOURCE_YEAR_OPTIONS.filter(Boolean),
+      useStaticFallback,
+    ) ?? []
+  const groupOptions =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('salesian_family_group'),
+      RESOURCE_GROUP_OPTIONS.filter(Boolean),
+      useStaticFallback,
+    ) ?? []
+  const authorOptions =
+    resourceFacetValues(
+      facetOptions,
+      corpusFilterFacetKey('contributor'),
+      RESOURCE_AUTHORS,
+      useStaticFallback,
+    ) ?? []
+  const filtersPending = !useStaticFallback && facetsLoading
+
+  const filtered = useMemo(() => {
+    if (useStaticFallback) return filterResources(sourceList, f)
+    return sourceList
+  }, [sourceList, f, useStaticFallback])
 
   const filteredSoRows = useMemo(
     () => filterSalesianonlineRows(soRows, f),
@@ -355,6 +482,7 @@ export function ResourcesView() {
       region: '',
       lang: '',
       year: '',
+      pubYear: '',
       access: '',
       group: '',
       publisher: '',
@@ -372,7 +500,7 @@ export function ResourcesView() {
             ? 'Browse, search, and access the Salesian knowledge corpus (offline sample data)'
             : librarySource === 'salesianonline'
               ? 'Media and posts from salesianonline.silver.final — search uses the API; document-type filters apply to items on this page.'
-              : 'Browse and search live resources from the platform library'
+              : 'Browse and search live resources from gsdp.gold.vector_db_input — filters and search run on the server.'
         }
       >
         <div className="flex flex-wrap gap-1 rounded-lg border border-border-sdb bg-white p-1">
@@ -415,7 +543,7 @@ export function ResourcesView() {
             Live ·{' '}
             {librarySource === 'salesianonline'
               ? `${filteredSoRows.length} on page${soTotal != null ? ` · ${soTotal.toLocaleString()} total` : ''}`
-              : `${apiRows.length} shown${apiTotal != null ? ` · ${apiTotal.toLocaleString()} total` : ''}`}
+              : `${filtered.length} on page${apiTotal != null ? ` · ${apiTotal.toLocaleString()} matching` : ''}`}
           </span>
         ) : null}
         <button
@@ -443,9 +571,9 @@ export function ResourcesView() {
               className={sel}
               value={f.docMedia}
               onChange={(e) => setF((s) => ({ ...s, docMedia: e.target.value }))}
-              aria-label="Attachment type"
+              aria-label={corpusFilterAriaLabel('doc_media')}
             >
-              <option value="">All attachments</option>
+              <option value="">{corpusFilterAllLabel('doc_media')}</option>
               <option value="pdf">PDF</option>
               <option value="image">Image / media</option>
             </select>
@@ -476,67 +604,51 @@ export function ResourcesView() {
             <select
               className={sel}
               value={f.theme}
+              disabled={filtersPending}
               onChange={(e) => setF((s) => ({ ...s, theme: e.target.value }))}
-              aria-label="Theme"
+              aria-label={corpusFilterAriaLabel('knowledge_area')}
             >
-              <option value="">All themes</option>
-              {RESOURCE_THEME_OPTIONS.filter(Boolean).map((o) => (
+              <option value="">{corpusFilterAllLabel('knowledge_area', filtersPending)}</option>
+              {themeOptions.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
               ))}
             </select>
-            <select className={sel} value={f.type} onChange={(e) => setF((s) => ({ ...s, type: e.target.value }))}>
-              <option value="">All types</option>
-              {RESOURCE_TYPE_OPTIONS.filter(Boolean).map((o) => (
+            <select
+              className={sel}
+              value={f.type}
+              disabled={filtersPending}
+              onChange={(e) => setF((s) => ({ ...s, type: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('work_type')}
+            >
+              <option value="">{corpusFilterAllLabel('work_type', filtersPending)}</option>
+              {typeOptions.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
               ))}
+            </select>
+            <select
+              className={sel}
+              value={f.docMedia}
+              onChange={(e) => setF((s) => ({ ...s, docMedia: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('doc_media')}
+            >
+              <option value="">{corpusFilterAllLabel('doc_media')}</option>
+              <option value="pdf">PDF</option>
+              <option value="image">Image</option>
             </select>
 
             <select
               className={sel}
               value={f.province}
+              disabled={filtersPending}
               onChange={(e) => setF((s) => ({ ...s, province: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('country')}
             >
-              {RESOURCE_PROVINCE_OPTIONS.map((o) => (
-                <option key={o.value || 'all'} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <select className={sel} value={f.region} onChange={(e) => setF((s) => ({ ...s, region: e.target.value }))}>
-              <option value="">All Regions</option>
-              {RESOURCE_REGION_OPTIONS.filter(Boolean).map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-            <select className={sel} value={f.lang} onChange={(e) => setF((s) => ({ ...s, lang: e.target.value }))}>
-              <option value="">All Languages</option>
-              {RESOURCE_LANG_OPTIONS.filter(Boolean).map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-            <select className={sel} value={f.year} onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))}>
-              <option value="">All Years</option>
-              {RESOURCE_YEAR_OPTIONS.filter(Boolean).map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </select>
-            <select className={sel} value={f.access} onChange={(e) => setF((s) => ({ ...s, access: e.target.value }))}>
-              <option value="">All Access</option>
-              <option value="open">Open Access</option>
-            </select>
-            <select className={sel} value={f.group} onChange={(e) => setF((s) => ({ ...s, group: e.target.value }))}>
-              <option value="">All Groups</option>
-              {RESOURCE_GROUP_OPTIONS.filter(Boolean).map((o) => (
+              <option value="">{corpusFilterAllLabel('country', filtersPending)}</option>
+              {countryOptions.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
@@ -544,24 +656,133 @@ export function ResourcesView() {
             </select>
             <select
               className={sel}
-              value={f.publisher}
-              onChange={(e) => setF((s) => ({ ...s, publisher: e.target.value }))}
+              value={f.region}
+              disabled={filtersPending}
+              onChange={(e) => setF((s) => ({ ...s, region: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('region')}
             >
-              <option value="">All Publishers</option>
-              {RESOURCE_PUBLISHERS.map((o) => (
+              <option value="">{corpusFilterAllLabel('region', filtersPending)}</option>
+              {regionOptions.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
               ))}
             </select>
-            <select className={sel} value={f.author} onChange={(e) => setF((s) => ({ ...s, author: e.target.value }))}>
-              <option value="">All Authors</option>
-              {RESOURCE_AUTHORS.map((o) => (
+            <select
+              className={sel}
+              value={f.lang}
+              disabled={filtersPending}
+              onChange={(e) => setF((s) => ({ ...s, lang: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('language')}
+            >
+              <option value="">{corpusFilterAllLabel('language', filtersPending)}</option>
+              {langOptions.map((o) => (
+                <option key={o.value || 'all-lang'} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className={sel}
+              value={f.year}
+              disabled={filtersPending}
+              onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('reference_year')}
+            >
+              <option value="">{corpusFilterAllLabel('reference_year', filtersPending)}</option>
+              {yearOptions.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>
               ))}
             </select>
+            <select
+              className={sel}
+              value={f.pubYear}
+              disabled={filtersPending}
+              onChange={(e) => setF((s) => ({ ...s, pubYear: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('publication_year')}
+            >
+              <option value="">{corpusFilterAllLabel('publication_year', filtersPending)}</option>
+              {pubYearOptions.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            {useStaticFallback ? (
+              <select className={sel} value={f.access} onChange={(e) => setF((s) => ({ ...s, access: e.target.value }))}>
+                <option value="">All Access</option>
+                <option value="open">Open Access</option>
+              </select>
+            ) : null}
+            <select
+              className={sel}
+              value={f.group}
+              disabled={filtersPending}
+              onChange={(e) => setF((s) => ({ ...s, group: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('salesian_family_group')}
+            >
+              <option value="">{corpusFilterAllLabel('salesian_family_group', filtersPending)}</option>
+              {groupOptions.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            {useStaticFallback ? (
+              <select
+                className={sel}
+                value={f.publisher}
+                onChange={(e) => setF((s) => ({ ...s, publisher: e.target.value }))}
+              >
+                <option value="">All Publishers</option>
+                {RESOURCE_PUBLISHERS.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <select
+              className={sel}
+              value={f.author}
+              disabled={filtersPending}
+              onChange={(e) => setF((s) => ({ ...s, author: e.target.value }))}
+              aria-label={corpusFilterAriaLabel('contributor')}
+            >
+              <option value="">{corpusFilterAllLabel('contributor', filtersPending)}</option>
+              {authorOptions.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            {!useStaticFallback ? (
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={apiOffset <= 0 || apiLoading}
+                  className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+                  onClick={() => setApiOffset((o) => Math.max(0, o - PLATFORM_LIBRARY_PAGE))}
+                >
+                  Previous page
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    apiLoading ||
+                    (apiTotal != null
+                      ? apiOffset + apiRows.length >= apiTotal
+                      : apiRows.length < PLATFORM_LIBRARY_PAGE)
+                  }
+                  className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+                  onClick={() => setApiOffset((o) => o + PLATFORM_LIBRARY_PAGE)}
+                >
+                  Next page
+                </button>
+              </div>
+            ) : null}
           </>
         )}
         <input
@@ -727,7 +948,7 @@ export function ResourcesView() {
                 <div className="mt-1 text-[13px] text-mid">{r.author}</div>
                 {r.publisher ? <div className="mt-0.5 text-[11px] text-mid">Publisher: {r.publisher}</div> : null}
                 <div className="mt-1 text-xs text-mid">
-                  {r.year} · {r.region} · {String(r.lang || '').split(',')[0] || '—'}
+                  {r.year} · {r.region} · {formatLanguageDisplay(String(r.lang || '').split(',')[0])}
                 </div>
                 {r.desc ? <div className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-mid">{r.desc}</div> : null}
               </div>
@@ -773,95 +994,126 @@ export function ResourcesView() {
 export function CollectionsView() {
   const [chip, setChip] = useState('')
   const [q, setQ] = useState('')
-  const [ontologyTiles, setOntologyTiles] = useState(null)
-  const [collectionsLoading, setCollectionsLoading] = useState(true)
-  const [collectionsErr, setCollectionsErr] = useState(null)
+  const [debouncedQ, setDebouncedQ] = useState('')
+  const [apiRows, setApiRows] = useState([])
+  const [apiTotal, setApiTotal] = useState(null)
+  const [apiOffset, setApiOffset] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(null)
+  const [facetOptions, setFacetOptions] = useState(null)
+  const [facetsLoading, setFacetsLoading] = useState(true)
+  const [selectedResource, setSelectedResource] = useState(null)
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQ(q.trim()), 450)
+    return () => window.clearTimeout(id)
+  }, [q])
+
+  useEffect(() => {
+    setApiOffset(0)
+  }, [debouncedQ, chip])
 
   useEffect(() => {
     let cancelled = false
-    const startId = window.setTimeout(() => {
-      if (cancelled) return
-      setCollectionsLoading(true)
-      setCollectionsErr(null)
-      fetchOntologyRows({ limit: 200, offset: 0 })
-        .then((res) => {
-          if (cancelled) return
-          const rows = res?.data || []
-          setOntologyTiles(buildDashboardCollectionTiles(rows, { limit: 14 }))
-        })
-        .catch((e) => {
-          if (!cancelled) {
-            setCollectionsErr(e instanceof Error ? e.message : String(e))
-            setOntologyTiles(null)
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setCollectionsLoading(false)
-        })
-    }, 0)
+    setFacetsLoading(true)
+    fetchVectorDbInputFacets()
+      .then((res) => {
+        if (!cancelled) setFacetOptions(res)
+      })
+      .catch(() => {
+        if (!cancelled) setFacetOptions({})
+      })
+      .finally(() => {
+        if (!cancelled) setFacetsLoading(false)
+      })
     return () => {
       cancelled = true
-      window.clearTimeout(startId)
     }
   }, [])
 
-  const sourceCollections = useMemo(() => {
-    if (collectionsLoading) return []
-    return Array.isArray(ontologyTiles) ? ontologyTiles : []
-  }, [collectionsLoading, ontologyTiles])
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setErr(null)
+    fetchOntologyRows({
+      limit: COLLECTIONS_PAGE,
+      offset: apiOffset,
+      q: debouncedQ,
+      filters: resourceFiltersToApiParams({ theme: chip }),
+    })
+      .then((res) => {
+        if (cancelled) return
+        setApiRows(Array.isArray(res.data) ? res.data : [])
+        setApiTotal(typeof res.total === 'number' ? res.total : null)
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedQ, chip, apiOffset])
+
+  const documents = useMemo(
+    () => (Array.isArray(apiRows) ? apiRows.map((row, i) => mapOntologyRowToResource(row, i)) : []),
+    [apiRows],
+  )
 
   const chipOptions = useMemo(() => {
-    const fromTiles = [...new Set(sourceCollections.map((c) => c.chip).filter(Boolean))]
-    const merged = [...new Set([...COLLECTION_CHIPS.filter(Boolean), ...fromTiles])]
-    return ['', ...merged]
-  }, [sourceCollections])
+    const fromApi =
+      resourceFacetValues(
+        facetOptions,
+        corpusFilterFacetKey('knowledge_area'),
+        RESOURCE_THEME_OPTIONS.filter(Boolean),
+        false,
+      ) ?? []
+    return ['', ...fromApi]
+  }, [facetOptions])
 
-  const filtered = useMemo(() => {
-    const cq = q.trim().toLowerCase()
-    return sourceCollections.filter(
-      (c) =>
-        (!cq ||
-          c.title.toLowerCase().includes(cq) ||
-          String(c.desc || '')
-            .toLowerCase()
-            .includes(cq)) &&
-        (!chip || c.chip === chip),
-    )
-  }, [chip, q, sourceCollections])
+  const totalLabel =
+    apiTotal != null ? apiTotal.toLocaleString() : documents.length.toLocaleString()
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Collections"
         subtitle={
-          collectionsLoading
-            ? 'Loading collection groups…'
-            : ontologyTiles && ontologyTiles.length > 0
-              ? 'Thematic clusters from your latest library data (refreshed on each visit)'
-              : 'No clusters matched the current filters. Try again later.'
+          loading
+            ? 'Loading documents…'
+            : `${documents.length.toLocaleString()} on this page${apiTotal != null ? ` · ${totalLabel} in corpus` : ''} — browse all library documents by knowledge area`
         }
       >
         <button type="button" className="rounded-lg bg-sdb-blue px-3 py-1.5 text-xs font-semibold text-white">
           + New Collection
         </button>
       </SectionHeader>
-      {collectionsErr ? (
+      {err ? (
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
-          Collections API: {collectionsErr.slice(0, 140)}
-          {collectionsErr.length > 140 ? '…' : ''}
+          Collections API: {err.slice(0, 140)}
+          {err.length > 140 ? '…' : ''}
         </div>
       ) : null}
       <FilterBar>
-        <select className={sel} value={chip} onChange={(e) => setChip(e.target.value)}>
-          {chipOptions.map((c) => (
-            <option key={c || 'all'} value={c}>
-              {c ? c : 'All categories'}
+        <select
+          className={sel}
+          value={chip}
+          disabled={facetsLoading}
+          onChange={(e) => setChip(e.target.value)}
+          aria-label={corpusFilterAriaLabel('knowledge_area')}
+        >
+          <option value="">{corpusFilterAllLabel('knowledge_area', facetsLoading)}</option>
+          {chipOptions.filter(Boolean).map((c) => (
+            <option key={c} value={c}>
+              {c}
             </option>
           ))}
         </select>
         <input
           className="min-w-[180px] flex-1 rounded border border-border-sdb bg-white px-3 py-1.5 text-[13px] outline-none focus:border-sdb-blue"
-          placeholder="🔍 Search collections…"
+          placeholder="🔍 Search documents…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -875,17 +1127,37 @@ export function CollectionsView() {
         >
           Clear
         </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={apiOffset <= 0 || loading}
+            className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+            onClick={() => setApiOffset((o) => Math.max(0, o - COLLECTIONS_PAGE))}
+          >
+            Previous page
+          </button>
+          <button
+            type="button"
+            disabled={
+              loading ||
+              (apiTotal != null ? apiOffset + documents.length >= apiTotal : documents.length < COLLECTIONS_PAGE)
+            }
+            className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+            onClick={() => setApiOffset((o) => o + COLLECTIONS_PAGE)}
+          >
+            Next page
+          </button>
+        </div>
       </FilterBar>
-      {collectionsLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true">
+      {loading ? (
+        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
           {[0, 1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
               className="overflow-hidden rounded-xl border border-dashed border-border-sdb bg-white shadow-sm"
             >
-              <div className="h-[90px] animate-pulse bg-slate-200/80" />
-              <div className="space-y-2 p-3.5">
-                <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
+              <div className="h-20 animate-pulse bg-slate-200/80" />
+              <div className="space-y-2 border-t border-border-sdb p-4">
                 <div className="h-4 w-full max-w-[200px] animate-pulse rounded bg-slate-200" />
                 <div className="h-3 w-full animate-pulse rounded bg-slate-200" />
                 <div className="h-3 w-2/3 animate-pulse rounded bg-slate-200" />
@@ -893,49 +1165,120 @@ export function CollectionsView() {
             </div>
           ))}
         </div>
-      ) : !filtered.length ? (
+      ) : !documents.length ? (
         <EmptyState
           icon="🗂"
-          title={collectionsErr ? 'Could not load collections' : 'No collections found'}
+          title={err ? 'Could not load documents' : 'No documents found'}
           msg={
-            collectionsErr
-              ? 'Fix the API connection and refresh. Static demo tiles are not shown.'
-              : 'Try adjusting your search or category filter.'
+            err
+              ? 'Fix the API connection and refresh.'
+              : 'Try adjusting your search or knowledge area filter.'
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((c) => (
+        <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+          {documents.map((r) => (
             <div
-              key={c.id}
-              className="cursor-pointer overflow-hidden rounded-xl border border-border-sdb bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+              key={r.id}
+              className="cursor-pointer overflow-hidden rounded-xl border border-border-sdb bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-sdb-blue-light hover:shadow-md"
+              onClick={() => setSelectedResource(r)}
             >
-              <div className="h-[90px]" style={{ background: c.bg }} />
-              <div className="p-3.5">
-                <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-orange-text">{c.chip}</div>
-                <div className="font-serif text-sm font-bold text-ink">{c.title}</div>
-                <p className="mt-1 text-[13px] leading-relaxed text-mid">{c.desc}</p>
-                <div className="mt-2.5 flex items-center justify-between text-[11px]">
-                  <span className="text-sm font-bold text-sdb-blue">{c.count} resources</span>
-                  <span className="text-sdb-orange">→</span>
+              <div
+                className="flex h-20 items-center justify-center text-3xl text-white/95 drop-shadow"
+                style={{ background: r.cover }}
+              >
+                {r.icon}
+              </div>
+              <div className="border-b border-border-sdb px-4 py-4">
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {r.area ? (
+                    <span className="rounded bg-sdb-orange/15 px-2 py-0.5 text-[10px] font-bold uppercase text-orange-text">
+                      {r.area}
+                    </span>
+                  ) : null}
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${resourceBadgeClass(r.badge)}`}
+                  >
+                    {r.icon} {r.type}
+                  </span>
+                </div>
+                <div className="text-sm font-bold leading-snug text-ink">{r.title}</div>
+                <div className="mt-1 text-[13px] text-mid">{r.author}</div>
+                <div className="mt-1 text-xs text-mid">
+                  {r.year} · {r.province || r.region || '—'} ·{' '}
+                  {formatLanguageDisplay(String(r.lang || '').split(',')[0])}
+                </div>
+                {r.desc ? <div className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-mid">{r.desc}</div> : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 px-4 py-2.5">
+                {r.tags.slice(0, 3).map((t) => (
+                  <span key={t} className="rounded bg-off-white px-2 py-0.5 text-xs text-slate-sdb">
+                    {t}
+                  </span>
+                ))}
+                <div className="ml-auto flex flex-wrap justify-end gap-1.5">
+                  {resourceDocumentUrl(r) ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-border-sdb bg-white px-2 py-1 text-[11px] font-semibold text-sdb-blue-deep shadow-sm"
+                      onClick={(e) => viewResourceDocument(e, r)}
+                    >
+                      View doc
+                    </button>
+                  ) : (
+                    <span className="self-center text-[10px] font-medium text-mid">No file URL</span>
+                  )}
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+      <ResourceDetailModal resource={selectedResource} onClose={() => setSelectedResource(null)} />
     </main>
   )
 }
 
 export function InstitutionsView() {
   const [fType, setFType] = useState('')
-  const [fProvince, setFProvince] = useState('')
+  const [fCountry, setFCountry] = useState('')
   const [fRegion, setFRegion] = useState('')
   const [q, setQ] = useState('')
-  const [ontologyInstitutions, setOntologyInstitutions] = useState(null)
+  const [debouncedQ, setDebouncedQ] = useState('')
+  const [apiOffset, setApiOffset] = useState(0)
+  const [apiTotal, setApiTotal] = useState(null)
+  const [ontologyInstitutions, setOntologyInstitutions] = useState([])
   const [instLoading, setInstLoading] = useState(true)
   const [instErr, setInstErr] = useState(null)
+  const [facetOptions, setFacetOptions] = useState(null)
+  const [facetsLoading, setFacetsLoading] = useState(true)
+
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQ(q.trim()), 450)
+    return () => window.clearTimeout(id)
+  }, [q])
+
+  useEffect(() => {
+    setApiOffset(0)
+  }, [debouncedQ, fType, fCountry, fRegion])
+
+  useEffect(() => {
+    let cancelled = false
+    setFacetsLoading(true)
+    fetchVectorDbInputFacets()
+      .then((res) => {
+        if (!cancelled) setFacetOptions(res)
+      })
+      .catch(() => {
+        if (!cancelled) setFacetOptions({})
+      })
+      .finally(() => {
+        if (!cancelled) setFacetsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const s = getSession()
@@ -944,63 +1287,57 @@ export function InstitutionsView() {
     if (!reg) return
     setFRegion((prev) => {
       if (prev) return prev
-      const allowed = ['South Asia', 'Europe', 'Africa']
-      if (!allowed.includes(reg)) return prev
+      const opts = resourceFacetValues(facetOptions, 'continents', [], false) ?? []
+      if (opts.length && !opts.includes(reg)) return prev
       return reg
     })
-  }, [])
+  }, [facetOptions])
 
   useEffect(() => {
     let cancelled = false
-    const startId = window.setTimeout(() => {
-      if (cancelled) return
-      setInstLoading(true)
-      setInstErr(null)
-      fetchOntologyRows({ limit: 220, offset: 0 })
-        .then((res) => {
-          if (cancelled) return
-          const rows = res?.data || []
-          setOntologyInstitutions(buildDashboardInstitutionsFromOntologyRows(rows, { limit: 60 }))
-        })
-        .catch((e) => {
-          if (!cancelled) {
-            setInstErr(e instanceof Error ? e.message : String(e))
-            setOntologyInstitutions(null)
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setInstLoading(false)
-        })
-    }, 0)
+    setInstLoading(true)
+    setInstErr(null)
+    fetchOntologyRows({
+      limit: PASTORAL_PAGE,
+      offset: apiOffset,
+      q: debouncedQ,
+      filters: resourceFiltersToApiParams({
+        type: fType,
+        province: fCountry,
+        region: fRegion,
+      }),
+    })
+      .then((res) => {
+        if (cancelled) return
+        const rows = res?.data || []
+        setOntologyInstitutions(
+          buildDashboardInstitutionsFromOntologyRows(rows, { limit: Math.max(rows.length, 1) }),
+        )
+        setApiTotal(typeof res.total === 'number' ? res.total : null)
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setInstErr(e instanceof Error ? e.message : String(e))
+          setOntologyInstitutions([])
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setInstLoading(false)
+      })
     return () => {
       cancelled = true
-      window.clearTimeout(startId)
     }
-  }, [])
+  }, [debouncedQ, fType, fCountry, fRegion, apiOffset])
 
-  const sourceInstitutions = useMemo(() => {
-    if (instLoading) return []
-    return Array.isArray(ontologyInstitutions) ? ontologyInstitutions : []
-  }, [instLoading, ontologyInstitutions])
+  const typeOptions =
+    resourceFacetValues(facetOptions, corpusFilterFacetKey('work_type'), [], false) ?? []
+  const countryOptions =
+    resourceFacetValues(facetOptions, corpusFilterFacetKey('country'), [], false) ?? []
+  const regionOptions =
+    resourceFacetValues(facetOptions, corpusFilterFacetKey('region'), [], false) ?? []
+  const filtersPending = facetsLoading
 
-  const filtered = useMemo(() => {
-    const qq = q.trim().toLowerCase()
-    return sourceInstitutions.filter((i) => {
-      if (
-        qq &&
-        !i.name.toLowerCase().includes(qq) &&
-        !i.type.toLowerCase().includes(qq) &&
-        !(i.province && i.province.toLowerCase().includes(qq)) &&
-        !(i.desc && i.desc.toLowerCase().includes(qq))
-      ) {
-        return false
-      }
-      if (fType && i.type !== fType) return false
-      if (fProvince && i.province !== fProvince) return false
-      if (fRegion && i.region !== fRegion) return false
-      return true
-    })
-  }, [fType, fProvince, fRegion, q, sourceInstitutions])
+  const filtered = ontologyInstitutions
 
   return (
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
@@ -1008,10 +1345,8 @@ export function InstitutionsView() {
         title="Pastoral Works"
         subtitle={
           instLoading
-            ? 'Loading institutions…'
-            : ontologyInstitutions && ontologyInstitutions.length > 0
-              ? 'Workplaces and pastoral sites from live library metadata (schools, centres, provinces, social works)'
-              : 'No institutions matched the current filters. Try again later.'
+            ? 'Loading pastoral works…'
+            : `${filtered.length.toLocaleString()} on this page${apiTotal != null ? ` · ${apiTotal.toLocaleString()} matching in corpus` : ''} — filters run on the server`
         }
       />
       {instErr ? (
@@ -1021,29 +1356,51 @@ export function InstitutionsView() {
         </div>
       ) : null}
       <FilterBar>
-        <select className={sel} value={fType} onChange={(e) => setFType(e.target.value)}>
-          {INSTITUTION_TYPE_OPTIONS.map((o) => (
-            <option key={o || 'all'} value={o}>
-              {o ? o : 'All types'}
+        <select
+          className={sel}
+          value={fType}
+          disabled={filtersPending}
+          onChange={(e) => setFType(e.target.value)}
+          aria-label={corpusFilterAriaLabel('work_type')}
+        >
+          <option value="">{corpusFilterAllLabel('work_type', filtersPending)}</option>
+          {typeOptions.map((o) => (
+            <option key={o} value={o}>
+              {o}
             </option>
           ))}
         </select>
-        <select className={sel} value={fProvince} onChange={(e) => setFProvince(e.target.value)}>
-          {RESOURCE_PROVINCE_OPTIONS.map((o) => (
-            <option key={o.value || 'all'} value={o.value}>
-              {o.label}
+        <select
+          className={sel}
+          value={fCountry}
+          disabled={filtersPending}
+          onChange={(e) => setFCountry(e.target.value)}
+          aria-label={corpusFilterAriaLabel('country')}
+        >
+          <option value="">{corpusFilterAllLabel('country', filtersPending)}</option>
+          {countryOptions.map((o) => (
+            <option key={o} value={o}>
+              {englishCountryDisplayName(o) || o}
             </option>
           ))}
         </select>
-        <select className={sel} value={fRegion} onChange={(e) => setFRegion(e.target.value)}>
-          <option value="">All Regions</option>
-          <option>South Asia</option>
-          <option>Europe</option>
-          <option>Africa</option>
+        <select
+          className={sel}
+          value={fRegion}
+          disabled={filtersPending}
+          onChange={(e) => setFRegion(e.target.value)}
+          aria-label={corpusFilterAriaLabel('region')}
+        >
+          <option value="">{corpusFilterAllLabel('region', filtersPending)}</option>
+          {regionOptions.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
         </select>
         <input
           className="min-w-[180px] flex-1 rounded border border-border-sdb bg-white px-3 py-1.5 text-[13px] outline-none focus:border-sdb-blue"
-          placeholder="🔍 Search by name, province, description…"
+          placeholder="🔍 Search by name, country, description…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -1052,13 +1409,34 @@ export function InstitutionsView() {
           className="text-xs font-semibold text-orange-text"
           onClick={() => {
             setFType('')
-            setFProvince('')
+            setFCountry('')
             setFRegion('')
             setQ('')
           }}
         >
           Clear
         </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={apiOffset <= 0 || instLoading}
+            className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+            onClick={() => setApiOffset((o) => Math.max(0, o - PASTORAL_PAGE))}
+          >
+            Previous page
+          </button>
+          <button
+            type="button"
+            disabled={
+              instLoading ||
+              (apiTotal != null ? apiOffset + filtered.length >= apiTotal : filtered.length < PASTORAL_PAGE)
+            }
+            className="rounded-lg border border-border-sdb bg-white px-3 py-1.5 text-xs font-semibold text-slate-sdb disabled:opacity-40"
+            onClick={() => setApiOffset((o) => o + PASTORAL_PAGE)}
+          >
+            Next page
+          </button>
+        </div>
       </FilterBar>
       <div className="overflow-x-auto rounded-xl border border-border-sdb bg-white" aria-busy={instLoading || undefined}>
         <table className="w-full min-w-[760px] border-collapse text-left">
@@ -1209,28 +1587,67 @@ const NETWORKS_GLOBAL_LINKS = [
 
 export function NetworksView() {
   const [toast, setToast] = useState('')
+  const [fTheme, setFTheme] = useState('')
+  const [fType, setFType] = useState('')
+  const [fCountry, setFCountry] = useState('')
+  const [fRegion, setFRegion] = useState('')
+  const [q, setQ] = useState('')
+  const [debouncedQ, setDebouncedQ] = useState('')
   const [rows, setRows] = useState([])
+  const [apiTotal, setApiTotal] = useState(null)
   const [loading, setLoading] = useState(true)
   const [netErr, setNetErr] = useState(null)
+  const [facetOptions, setFacetOptions] = useState(null)
+  const [facetsLoading, setFacetsLoading] = useState(true)
 
-  const kpis = useMemo(() => buildNetworkKpisFromOntologyRows(rows), [rows])
-  const provinces = useMemo(() => buildNetworkProvincesFromOntologyRows(rows, { limit: 14 }), [rows])
-  const regional = useMemo(() => buildNetworkRegionalFromOntologyRows(rows, { limit: 12 }), [rows])
-  const wayPills = useMemo(() => buildNetworkWayPillsFromOntologyRows(rows, { limit: 8 }), [rows])
+  useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQ(q.trim()), 450)
+    return () => window.clearTimeout(id)
+  }, [q])
+
+  useEffect(() => {
+    let cancelled = false
+    setFacetsLoading(true)
+    fetchVectorDbInputFacets()
+      .then((res) => {
+        if (!cancelled) setFacetOptions(res)
+      })
+      .catch(() => {
+        if (!cancelled) setFacetOptions({})
+      })
+      .finally(() => {
+        if (!cancelled) setFacetsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setNetErr(null)
-    fetchOntologyRows({ limit: 280, offset: 0 })
+    fetchOntologyRows({
+      limit: NETWORKS_PAGE,
+      offset: 0,
+      q: debouncedQ,
+      filters: resourceFiltersToApiParams({
+        theme: fTheme,
+        type: fType,
+        province: fCountry,
+        region: fRegion,
+      }),
+    })
       .then((res) => {
         if (cancelled) return
         setRows(Array.isArray(res?.data) ? res.data : [])
+        setApiTotal(typeof res.total === 'number' ? res.total : null)
       })
       .catch((e) => {
         if (!cancelled) {
           setNetErr(e instanceof Error ? e.message : String(e))
           setRows([])
+          setApiTotal(null)
         }
       })
       .finally(() => {
@@ -1239,7 +1656,22 @@ export function NetworksView() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [debouncedQ, fTheme, fType, fCountry, fRegion])
+
+  const themeOptions =
+    resourceFacetValues(facetOptions, corpusFilterFacetKey('knowledge_area'), [], false) ?? []
+  const typeOptions =
+    resourceFacetValues(facetOptions, corpusFilterFacetKey('work_type'), [], false) ?? []
+  const countryOptions =
+    resourceFacetValues(facetOptions, corpusFilterFacetKey('country'), [], false) ?? []
+  const regionOptions =
+    resourceFacetValues(facetOptions, corpusFilterFacetKey('region'), [], false) ?? []
+  const filtersPending = facetsLoading
+
+  const kpis = useMemo(() => buildNetworkKpisFromOntologyRows(rows), [rows])
+  const provinces = useMemo(() => buildNetworkProvincesFromOntologyRows(rows, { limit: 14 }), [rows])
+  const regional = useMemo(() => buildNetworkRegionalFromOntologyRows(rows, { limit: 12 }), [rows])
+  const wayPills = useMemo(() => buildNetworkWayPillsFromOntologyRows(rows, { limit: 8 }), [rows])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -1265,7 +1697,7 @@ export function NetworksView() {
             ? 'Loading network metrics…'
             : netErr
               ? 'Library data could not be loaded — global links below are still available.'
-              : 'Provinces, themes, and KPIs from live library rows (indicative, not official statistics).'
+              : `${rows.length.toLocaleString()} records in view${apiTotal != null ? ` · ${apiTotal.toLocaleString()} matching filters` : ''} — KPIs and lists update from filtered corpus rows`
         }
       />
       {netErr ? (
@@ -1274,6 +1706,84 @@ export function NetworksView() {
           {netErr.length > 160 ? '…' : ''}
         </div>
       ) : null}
+
+      <FilterBar>
+        <select
+          className={sel}
+          value={fTheme}
+          disabled={filtersPending}
+          onChange={(e) => setFTheme(e.target.value)}
+          aria-label={corpusFilterAriaLabel('knowledge_area')}
+        >
+          <option value="">{corpusFilterAllLabel('knowledge_area', filtersPending)}</option>
+          {themeOptions.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <select
+          className={sel}
+          value={fType}
+          disabled={filtersPending}
+          onChange={(e) => setFType(e.target.value)}
+          aria-label={corpusFilterAriaLabel('work_type')}
+        >
+          <option value="">{corpusFilterAllLabel('work_type', filtersPending)}</option>
+          {typeOptions.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <select
+          className={sel}
+          value={fCountry}
+          disabled={filtersPending}
+          onChange={(e) => setFCountry(e.target.value)}
+          aria-label={corpusFilterAriaLabel('country')}
+        >
+          <option value="">{corpusFilterAllLabel('country', filtersPending)}</option>
+          {countryOptions.map((o) => (
+            <option key={o} value={o}>
+              {englishCountryDisplayName(o) || o}
+            </option>
+          ))}
+        </select>
+        <select
+          className={sel}
+          value={fRegion}
+          disabled={filtersPending}
+          onChange={(e) => setFRegion(e.target.value)}
+          aria-label={corpusFilterAriaLabel('region')}
+        >
+          <option value="">{corpusFilterAllLabel('region', filtersPending)}</option>
+          {regionOptions.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <input
+          className="min-w-[180px] flex-1 rounded border border-border-sdb bg-white px-3 py-1.5 text-[13px] outline-none focus:border-sdb-blue"
+          placeholder="🔍 Search networks corpus…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <button
+          type="button"
+          className="text-xs font-semibold text-orange-text"
+          onClick={() => {
+            setFTheme('')
+            setFType('')
+            setFCountry('')
+            setFRegion('')
+            setQ('')
+          }}
+        >
+          Clear
+        </button>
+      </FilterBar>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-busy={loading || undefined}>
         {loading
@@ -1458,9 +1968,10 @@ function filterEvents(list, f) {
 
 export function EventsView() {
   const [f, setF] = useState({ type: '', region: '', group: '', month: '', q: '' })
-  const [ontologyEvents, setOntologyEvents] = useState(null)
-  const [eventsLoading, setEventsLoading] = useState(true)
-  const [eventsErr, setEventsErr] = useState(null)
+  /** No events calendar API yet — list and counts stay at zero. */
+  const eventCount = 0
+  const sourceEvents = useMemo(() => [], [])
+  const filtered = useMemo(() => filterEvents(sourceEvents, f), [f, sourceEvents])
 
   useEffect(() => {
     const s = getSession()
@@ -1474,41 +1985,6 @@ export function EventsView() {
     })
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    const startId = window.setTimeout(() => {
-      if (cancelled) return
-      setEventsLoading(true)
-      setEventsErr(null)
-      fetchOntologyRows({ limit: 220, offset: 0 })
-        .then((res) => {
-          if (cancelled) return
-          const rows = res?.data || []
-          setOntologyEvents(buildDashboardEventsFromOntologyRows(rows, { limit: 56 }))
-        })
-        .catch((e) => {
-          if (!cancelled) {
-            setEventsErr(e instanceof Error ? e.message : String(e))
-            setOntologyEvents(null)
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setEventsLoading(false)
-        })
-    }, 0)
-    return () => {
-      cancelled = true
-      window.clearTimeout(startId)
-    }
-  }, [])
-
-  const sourceEvents = useMemo(() => {
-    if (eventsLoading) return []
-    return Array.isArray(ontologyEvents) ? ontologyEvents : []
-  }, [eventsLoading, ontologyEvents])
-
-  const filtered = useMemo(() => filterEvents(sourceEvents, f), [f, sourceEvents])
-
   const typeBadge = (t) => {
     if (t === 'ev-youth') return 'bg-amber-100 text-amber-900'
     if (t === 'ev-congress') return 'bg-sdb-blue-pale text-sdb-blue-deep'
@@ -1521,20 +1997,8 @@ export function EventsView() {
     <main className="min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Events"
-        subtitle={
-          eventsLoading
-            ? 'Loading events…'
-            : ontologyEvents && ontologyEvents.length > 0
-              ? 'Gatherings, congresses, and dated activities from library metadata and keywords'
-              : 'No events matched the current filters. Try again later.'
-        }
+        subtitle={`${eventCount.toLocaleString()} events — events calendar not connected yet`}
       />
-      {eventsErr ? (
-        <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-950">
-          Events API: {eventsErr.slice(0, 140)}
-          {eventsErr.length > 140 ? '…' : ''}
-        </div>
-      ) : null}
       <FilterBar>
         <select className={sel} value={f.type} onChange={(e) => setF((s) => ({ ...s, type: e.target.value }))}>
           {EVENT_TYPE_NAMES.map((o) => (
@@ -1574,35 +2038,12 @@ export function EventsView() {
           Clear
         </button>
       </FilterBar>
-      <div className="flex flex-col gap-3" aria-busy={eventsLoading || undefined}>
-        {eventsLoading ? (
-          [0, 1, 2, 3, 4].map((sk) => (
-            <div key={sk} className="flex gap-4 rounded-xl border border-dashed border-border-sdb bg-white p-4 shadow-sm">
-              <div className="w-[52px] shrink-0 rounded-lg bg-slate-100 px-1 py-2">
-                <div className="mx-auto h-7 w-10 animate-pulse rounded bg-slate-200" />
-                <div className="mx-auto mt-2 h-3 w-8 animate-pulse rounded bg-slate-100" />
-              </div>
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="h-5 w-28 animate-pulse rounded-full bg-slate-200" />
-                <div className="h-4 w-full max-w-md animate-pulse rounded bg-slate-200" />
-                <div className="flex gap-3">
-                  <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
-                  <div className="h-3 w-20 animate-pulse rounded bg-slate-100" />
-                </div>
-                <div className="h-3 w-full max-w-xl animate-pulse rounded bg-slate-100" />
-                <div className="h-3 w-full max-w-lg animate-pulse rounded bg-slate-100" />
-              </div>
-            </div>
-          ))
-        ) : !filtered.length ? (
+      <div className="flex flex-col gap-3">
+        {!filtered.length ? (
           <EmptyState
             icon="📅"
-            title={eventsErr ? 'Could not load events' : 'No events found'}
-            msg={
-              eventsErr
-                ? 'Fix the API connection and refresh. Static demo events are not shown.'
-                : 'Try adjusting your filters.'
-            }
+            title="0 events"
+            msg="Events calendar not connected yet — no event details to display."
           />
         ) : (
           filtered.map((e) => (
@@ -1997,7 +2438,8 @@ export function OwlView() {
   const totalRows = summary?.total_rows != null ? Number(summary.total_rows).toLocaleString() : '—'
   const knowAreas =
     summary?.distinct_knowledge_areas != null ? String(summary.distinct_knowledge_areas) : '—'
-  const lastIngest = summary?.last_ingestion || summary?.last_updated || '—'
+  const lastIngestRaw = summary?.last_ingestion || summary?.last_updated
+  const lastIngest = lastIngestRaw ? formatDateTimeDisplay(lastIngestRaw) : '—'
 
   const kpi = sumLoading
     ? [

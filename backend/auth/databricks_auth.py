@@ -4,8 +4,9 @@ Read/write auth users and roles in Unity Catalog via the SQL warehouse (databric
 Passwords: bcrypt hashes are produced in Python (auth.security.get_password_hash) — Databricks SQL
 does not provide bcrypt/Argon2 for application passwords; storing pre-hashed secrets in Delta is standard.
 
-If tables are missing (TABLE_OR_VIEW_NOT_FOUND), call ensure_auth_tables_exist() — used automatically
-before reads/writes (idempotent CREATE SCHEMA / CREATE TABLE IF NOT EXISTS).
+If tables are missing (TABLE_OR_VIEW_NOT_FOUND), ensure_auth_tables_exist() runs automatically
+(idempotent CREATE SCHEMA / CREATE TABLE IF NOT EXISTS). Point DATABRICKS_AUTH_USERS_TABLE
+and DATABRICKS_AUTH_ROLES_TABLE at existing UC tables (e.g. gsdp.users.users) when data already exists.
 """
 
 import json
@@ -20,8 +21,8 @@ from database.databricks import get_databricks_connection
 
 load_dotenv()
 
-# Defaults: ontology.silver.{users|roles} — do not use schema name "users" unless that schema exists in UC.
-CATALOG = os.getenv("DATABRICKS_AUTH_CATALOG", "ontology")
+# Defaults: gsdp.users.{users|roles} — override with DATABRICKS_AUTH_*_TABLE in .env
+CATALOG = os.getenv("DATABRICKS_AUTH_CATALOG", "gsdp")
 SCHEMA = os.getenv("DATABRICKS_AUTH_SCHEMA", "users")
 
 _ensure_lock = threading.Lock()
@@ -434,6 +435,75 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
                     "role_allowed_pages_json": d.get("role_allowed_pages_json"),
                     "role": {"id": d.get("r_id"), "name": d.get("role_name")},
                 }
+        finally:
+            conn.close()
+
+    return _run_with_table_guard(_go)
+
+
+def list_users(
+    limit: int = 100,
+    offset: int = 0,
+    search: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Paginated users with joined role (no password hashes in rows)."""
+    limit = max(1, min(int(limit), 500))
+    offset = max(0, int(offset))
+    users = _users_table_sql()
+    roles = _roles_table_sql()
+    select_sql = f"""
+    SELECT u.id AS user_id, u.username, u.email, u.region, u.role_id,
+           r.id AS r_id, r.name AS role_name, r.allowed_pages_json AS role_allowed_pages_json
+    FROM {users} u
+    INNER JOIN {roles} r ON u.role_id = r.id
+    """
+    order_sql = "ORDER BY u.id"
+
+    def _map_row(cur, row) -> Dict[str, Any]:
+        d = _row_to_dict(cur, row)
+        return {
+            "id": d.get("user_id"),
+            "username": d.get("username"),
+            "email": d.get("email"),
+            "region": d.get("region"),
+            "role_id": d.get("role_id"),
+            "role_allowed_pages_json": d.get("role_allowed_pages_json"),
+            "role": {"id": d.get("r_id"), "name": d.get("role_name")},
+        }
+
+    def _go():
+        conn = get_databricks_connection()
+        try:
+            with conn.cursor() as cur:
+                q_clean = (search or "").strip()
+                if q_clean:
+                    q_clean = q_clean[:200]
+                    pat = f"%{q_clean}%"
+                    where = """WHERE (
+                        lower(u.username) like lower(?)
+                        OR lower(u.email) like lower(?)
+                        OR lower(u.region) like lower(?)
+                        OR lower(r.name) like lower(?)
+                    )"""
+                    params = (pat, pat, pat, pat)
+                    cur.execute(
+                        f"SELECT COUNT(*) AS c FROM {users} u INNER JOIN {roles} r ON u.role_id = r.id {where}",
+                        params,
+                    )
+                    total = int(cur.fetchone()[0])
+                    cur.execute(
+                        f"{select_sql} {where} {order_sql} LIMIT {limit} OFFSET {offset}",
+                        params,
+                    )
+                else:
+                    cur.execute(
+                        f"SELECT COUNT(*) AS c FROM {users} u INNER JOIN {roles} r ON u.role_id = r.id"
+                    )
+                    total = int(cur.fetchone()[0])
+                    cur.execute(f"{select_sql} {order_sql} LIMIT {limit} OFFSET {offset}")
+                rows = cur.fetchall()
+                data = [_map_row(cur, r) for r in rows]
+                return {"data": data, "total": total}
         finally:
             conn.close()
 

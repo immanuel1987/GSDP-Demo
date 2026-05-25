@@ -81,3 +81,12 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str
     user: UserResponse
+
+
+class UserListResponse(BaseModel):
+    status: str = "success"
+    count: int
+    total: int
+    limit: int
+    offset: int
+    data: List[UserResponse]

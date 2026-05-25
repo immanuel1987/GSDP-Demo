@@ -1,4 +1,5 @@
 import { ANALYTICS_PROVINCE_DATA } from '../data/analyticsProvinceData'
+import { isUsableDynamicSlideImage } from '../data/homeStaticImages'
 
 /** Base URL for backend (e.g. `VITE_API_BASE_URL` in `.env.development`). */
 // export function apiBase() {
@@ -66,12 +67,33 @@ export function apiFetch(input, init) {
   return fetch(input, mergeApiFetchInit(init))
 }
 
-export async function fetchOntologyRows({ limit = 80, offset = 0, q = '' } = {}) {
-  const params = new URLSearchParams()
-  params.set('limit', String(400))
-  params.set('offset', String(5))
-  if (q.trim()) params.set('q', q.trim())
-  const url = `${apiBase()}/data/ontology?${params.toString()}`
+/**
+ * @param {Record<string, string | number | undefined>} filters
+ */
+function appendVectorDbFilterParams(params, filters = {}) {
+  const map = {
+    knowledge_area: filters.knowledge_area,
+    work_type: filters.work_type,
+    language: filters.language,
+    country: filters.country,
+    region: filters.region,
+    reference_year: filters.reference_year,
+    publication_year: filters.publication_year,
+    salesian_family_group: filters.salesian_family_group,
+    contributor: filters.contributor,
+    doc_media: filters.doc_media,
+  }
+  for (const [key, val] of Object.entries(map)) {
+    if (val == null || val === '') continue
+    params.set(key, String(val))
+  }
+}
+
+/**
+ * Facet values for Resource Library filters (GET /data/vector-db-input/facets).
+ */
+export async function fetchVectorDbInputFacets() {
+  const url = `${apiBase()}/data/vector-db-input/facets`
   const res = await apiFetch(url)
   if (!res.ok) {
     const text = await res.text()
@@ -85,6 +107,375 @@ export async function fetchOntologyRows({ limit = 80, offset = 0, q = '' } = {})
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
   }
   return res.json()
+}
+
+/**
+ * Paginated rows from `gsdp.gold.vector_db_input` (GET /data/vector-db-input).
+ * @param {{ limit?: number, offset?: number, q?: string, filters?: Record<string, string|number|undefined> }} opts
+ */
+export async function fetchVectorDbInputRows({ limit = 80, offset = 0, q = '', filters = {} } = {}) {
+  const params = new URLSearchParams()
+  params.set('limit', String(limit))
+  params.set('offset', String(offset))
+  if (q.trim()) params.set('q', q.trim())
+  appendVectorDbFilterParams(params, filters)
+  const url = `${apiBase()}/data/vector-db-input?${params.toString()}`
+  const res = await apiFetch(url)
+  if (!res.ok) {
+    const text = await res.text()
+    let detail = text
+    try {
+      const j = JSON.parse(text)
+      detail = j.detail ?? text
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
+  }
+  return res.json()
+}
+
+/**
+ * Canonical filter labels aligned with vector_db_input column names (knowledge_area, work_type, …).
+ */
+export const CORPUS_FILTER_LABELS = {
+  knowledge_area: {
+    all: 'All knowledge areas',
+    loading: 'Loading knowledge areas…',
+    aria: 'Knowledge area',
+    facetKey: 'themes',
+  },
+  work_type: {
+    all: 'All work types',
+    loading: 'Loading work types…',
+    aria: 'Work type',
+    facetKey: 'types',
+  },
+  country: {
+    all: 'All countries',
+    loading: 'Loading countries…',
+    aria: 'Country',
+    facetKey: 'countries',
+  },
+  region: {
+    all: 'All regions',
+    loading: 'Loading regions…',
+    aria: 'Region',
+    facetKey: 'continents',
+  },
+  language: {
+    all: 'All languages',
+    loading: 'Loading languages…',
+    aria: 'Language',
+    facetKey: 'languages',
+  },
+  reference_year: {
+    all: 'All reference years',
+    loading: 'Loading reference years…',
+    aria: 'Reference year',
+    facetKey: 'years',
+  },
+  publication_year: {
+    all: 'All publication years',
+    loading: 'Loading publication years…',
+    aria: 'Publication year',
+    facetKey: 'publication_years',
+  },
+  salesian_family_group: {
+    all: 'All groups',
+    loading: 'Loading groups…',
+    aria: 'Salesian family group',
+    facetKey: 'groups',
+  },
+  contributor: {
+    all: 'All contributors',
+    loading: 'Loading contributors…',
+    aria: 'Contributor',
+    facetKey: 'contributors',
+  },
+  doc_media: {
+    all: 'All attachments',
+    loading: 'Loading attachments…',
+    aria: 'Attachment type',
+    facetKey: null,
+  },
+}
+
+/** @param {keyof typeof CORPUS_FILTER_LABELS} fieldKey */
+export function corpusFilterAllLabel(fieldKey, pending = false) {
+  const d = CORPUS_FILTER_LABELS[fieldKey]
+  if (!d) return pending ? 'Loading…' : 'All'
+  return pending ? d.loading : d.all
+}
+
+/** @param {keyof typeof CORPUS_FILTER_LABELS} fieldKey */
+export function corpusFilterAriaLabel(fieldKey) {
+  return CORPUS_FILTER_LABELS[fieldKey]?.aria || fieldKey
+}
+
+/** Facet array key on GET /data/vector-db-input/facets for a corpus column. */
+export function corpusFilterFacetKey(fieldKey) {
+  return CORPUS_FILTER_LABELS[fieldKey]?.facetKey ?? null
+}
+
+/**
+ * Facet list for Resource Library dropdowns: API values when live, static sample when offline.
+ * @returns {string[] | null} `null` while facets are loading (live mode only).
+ */
+export function resourceFacetValues(facetOptions, key, staticFallback, useStaticFallback) {
+  if (useStaticFallback) {
+    return Array.isArray(staticFallback) ? staticFallback.filter(Boolean) : []
+  }
+  if (!facetOptions || typeof facetOptions !== 'object') return null
+  const list = facetOptions[key]
+  return Array.isArray(list) ? list.filter((v) => v != null && String(v).trim() !== '') : []
+}
+
+/**
+ * Map gsdp.gold.vector_db_input columns → shape expected by resource/home/dashboard builders.
+ */
+export function mapVectorDbRowToOntologyShape(row) {
+  if (!row || typeof row !== 'object') return row
+  const pubYear = row.publication_year
+  const yearStr = pubYear != null && pubYear !== '' ? String(pubYear) : ''
+  const dateFromYear = yearStr.length >= 4 ? `${yearStr.slice(0, 4)}-01-01` : ''
+  return {
+    ...row,
+    title: row.title,
+    subject: row.subject,
+    name: row.title,
+    description: row.abstract,
+    summary: row.abstract,
+    excerpt: row.abstract,
+    author: row.contributor,
+    authors: row.contributor,
+    contributors: row.contributor,
+    url: row.url,
+    file_name: row.file_name,
+    work_type: row.work_type,
+    type: row.work_type,
+    publication_type: row.work_type,
+    source_category: row.content_classification,
+    knowledge_area: row.knowledge_area,
+    languages: row.language,
+    language: row.language,
+    province_region: row.country,
+    country: row.country,
+    inferred_continent: row.inferred_continent,
+    salesian_family_group: row.salesian_family_group,
+    document_id: row.document_id,
+    vector_id: row.vector_id,
+    created_at: row.created_at,
+    ingestion_time: row.created_at,
+    updated_at: row.created_at,
+    publish_date: dateFromYear,
+    date_published: dateFromYear,
+    date_created: dateFromYear,
+    publication_year: row.publication_year,
+    keywords: row.subject,
+    tags: row.knowledge_area || row.subject,
+    _corpus: 'vector_db_input',
+  }
+}
+
+/** Primary catalog fetch for homepage, dashboard, and resource library (vector DB input table). */
+export async function fetchOntologyRows({ limit = 80, offset = 0, q = '', filters = {} } = {}) {
+  const block = await fetchVectorDbInputRows({ limit, offset, q, filters })
+  const data = (block.data || []).map(mapVectorDbRowToOntologyShape)
+  return { ...block, data }
+}
+
+const LANGUAGE_ALIASES = {
+  en: 'English',
+  eng: 'English',
+  english: 'English',
+  it: 'Italian',
+  ita: 'Italian',
+  italian: 'Italian',
+  es: 'Spanish',
+  spa: 'Spanish',
+  spanish: 'Spanish',
+  fr: 'French',
+  fre: 'French',
+  french: 'French',
+  pt: 'Portuguese',
+  por: 'Portuguese',
+  portuguese: 'Portuguese',
+  de: 'German',
+  ger: 'German',
+  german: 'German',
+  ta: 'Tamil',
+  tam: 'Tamil',
+  tamil: 'Tamil',
+  te: 'Telugu',
+  tel: 'Telugu',
+  telugu: 'Telugu',
+  hi: 'Hindi',
+  hin: 'Hindi',
+  hindi: 'Hindi',
+  la: 'Latin',
+  lat: 'Latin',
+  latin: 'Latin',
+  ar: 'Arabic',
+  ara: 'Arabic',
+  arabic: 'Arabic',
+  zh: 'Chinese',
+  chi: 'Chinese',
+  chinese: 'Chinese',
+  ml: 'Malayalam',
+  mal: 'Malayalam',
+  malayalam: 'Malayalam',
+  kn: 'Kannada',
+  kan: 'Kannada',
+  kannada: 'Kannada',
+}
+
+let languageDisplayNames
+try {
+  languageDisplayNames = new Intl.DisplayNames(['en'], { type: 'language' })
+} catch {
+  languageDisplayNames = null
+}
+
+function formatOneLanguageToken(token) {
+  const t = String(token ?? '').trim()
+  if (!t) return ''
+  const lower = t.toLowerCase()
+  if (LANGUAGE_ALIASES[lower]) return LANGUAGE_ALIASES[lower]
+  if (/^[a-z]{2,3}$/i.test(t) && languageDisplayNames) {
+    try {
+      const name = languageDisplayNames.of(lower)
+      if (name && name.toLowerCase() !== lower) return name
+    } catch {
+      /* ignore */
+    }
+  }
+  if (LANGUAGE_ALIASES[lower]) return LANGUAGE_ALIASES[lower]
+  if (t.length <= 3 && /^[a-z]+$/i.test(t)) return t.toUpperCase()
+  return t.replace(/\b[\w']+\b/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+}
+
+/** "EN" / "en, it" → "English" / "English, Italian" for UI labels. */
+export function formatLanguageDisplay(raw) {
+  if (raw == null || raw === '') return '—'
+  const s = String(raw).trim()
+  if (!s || s === '—') return '—'
+  const parts = s
+    .split(/[,;|/]/)
+    .map((p) => formatOneLanguageToken(p.trim()))
+    .filter(Boolean)
+  return parts.length ? parts.join(', ') : '—'
+}
+
+/**
+ * Filter dropdown options: `value` = stored corpus code (for API), `label` = full language name.
+ */
+export function languageSelectOptions(rawLanguages) {
+  const list = Array.isArray(rawLanguages) ? rawLanguages : []
+  const seen = new Set()
+  const out = []
+  for (const raw of list) {
+    const value = String(raw ?? '').trim()
+    if (!value || seen.has(value.toLowerCase())) continue
+    seen.add(value.toLowerCase())
+    out.push({ value, label: formatLanguageDisplay(value) })
+  }
+  out.sort((a, b) => a.label.localeCompare(b.label))
+  return out
+}
+
+/** Parse a corpus year column to integer or null. */
+export function parseCorpusYearInt(val) {
+  if (val == null || val === '') return null
+  const n = parseInt(String(val).trim(), 10)
+  return Number.isFinite(n) && n >= 0 && n <= 9999 ? n : null
+}
+
+/** Reference period label from reference_start_year / reference_end_year only. */
+export function formatResourceReferencePeriod(row) {
+  if (!row || typeof row !== 'object') return null
+  const start =
+    parseCorpusYearInt(row.reference_start_year) ?? parseCorpusYearInt(row.referenceStartYear)
+  const end = parseCorpusYearInt(row.reference_end_year) ?? parseCorpusYearInt(row.referenceEndYear)
+  if (start != null && end != null) {
+    return start === end ? String(start) : `${start}–${end}`
+  }
+  if (start != null) return String(start)
+  if (end != null) return String(end)
+  return null
+}
+
+/** Published year label from publication_year. */
+export function formatResourcePublishedYear(row) {
+  if (!row || typeof row !== 'object') return null
+  const pub =
+    parseCorpusYearInt(row.publication_year) ?? parseCorpusYearInt(row.publishedYear)
+  return pub != null ? String(pub) : null
+}
+
+/** Combined year line for cards: reference period and publication year when both exist. */
+export function formatResourceYearSummary(row) {
+  if (!row || typeof row !== 'object') return '—'
+  const ref = formatResourceReferencePeriod(row)
+  const pub = formatResourcePublishedYear(row)
+  if (ref && pub) {
+    if (ref === pub || ref.includes(pub)) return ref
+    return `${ref} · Pub. ${pub}`
+  }
+  if (ref) return ref
+  if (pub) return pub
+  const yRaw = row.date_published || row.publish_date || row.date_created || row.created_at || ''
+  if (typeof yRaw === 'string' && yRaw.length >= 4) return yRaw.slice(0, 4)
+  if (yRaw != null && yRaw !== '') return String(yRaw).slice(0, 4)
+  return '—'
+}
+
+/** @deprecated Use formatResourceYearSummary */
+export function formatResourceReferenceYears(row) {
+  return formatResourceYearSummary(row)
+}
+
+/** True when filter year falls within the row's reference period (inclusive). */
+export function resourceMatchesReferenceYear(row, filterYear) {
+  const y = parseCorpusYearInt(filterYear)
+  if (y == null) return true
+  const start =
+    parseCorpusYearInt(row?.reference_start_year) ?? parseCorpusYearInt(row?.referenceStartYear)
+  const end =
+    parseCorpusYearInt(row?.reference_end_year) ?? parseCorpusYearInt(row?.referenceEndYear)
+  if (start == null && end == null) return false
+  const lo = Math.min(start ?? y, end ?? y)
+  const hi = Math.max(start ?? y, end ?? y)
+  return y >= lo && y <= hi
+}
+
+/** True when filter year equals the row's publication_year. */
+export function resourceMatchesPublicationYear(row, filterYear) {
+  const y = parseCorpusYearInt(filterYear)
+  if (y == null) return true
+  const pub =
+    parseCorpusYearInt(row?.publication_year) ?? parseCorpusYearInt(row?.publishedYear)
+  return pub != null && pub === y
+}
+
+/** Map Resource Library UI filter state → vector-db-input API query params. */
+export function resourceFiltersToApiParams(f) {
+  if (!f) return {}
+  const refYear = f.year != null && String(f.year).trim() !== '' ? parseInt(String(f.year), 10) : undefined
+  const pubYear =
+    f.pubYear != null && String(f.pubYear).trim() !== '' ? parseInt(String(f.pubYear), 10) : undefined
+  return {
+    knowledge_area: f.theme || undefined,
+    work_type: f.type || undefined,
+    country: f.province || undefined,
+    region: f.region || undefined,
+    language: f.lang || undefined,
+    reference_year: Number.isFinite(refYear) ? refYear : undefined,
+    publication_year: Number.isFinite(pubYear) ? pubYear : undefined,
+    salesian_family_group: f.group || undefined,
+    contributor: f.author || undefined,
+    doc_media: f.docMedia || undefined,
+  }
 }
 
 /**
@@ -112,11 +503,48 @@ export async function fetchSalesianonlineFinalRows({ limit = 100, offset = 0, q 
   return res.json()
 }
 
-/** @param {unknown} v */
-export function formatOntologyCellForDisplay(v) {
+const ISO_DATETIME_RE =
+  /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$/
+
+/** True when a string looks like an ISO / warehouse timestamp. */
+export function isIsoDateTimeString(value) {
+  const s = String(value ?? '').trim()
+  if (!s) return false
+  return ISO_DATETIME_RE.test(s) || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)
+}
+
+/**
+ * Human-readable date/time (e.g. `2026-05-21T11:13:22.838071+00:00` → `21 May 2026, 11:13`).
+ * @param {unknown} value
+ * @param {{ withTime?: boolean }} [opts]
+ */
+export function formatDateTimeDisplay(value, { withTime = true } = {}) {
+  if (value == null || value === '') return ''
+  const s = String(value).trim()
+  if (!s) return ''
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s
+  if (withTime) {
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+/** Format cell / field values; timestamps are converted to locale date-time. */
+export function formatDisplayValue(v) {
   if (v == null || v === '') return null
   if (Array.isArray(v)) {
-    const s = v.map((x) => String(x)).filter(Boolean).join(', ')
+    const s = v.map((x) => formatDisplayValue(x) || String(x)).filter(Boolean).join(', ')
     return s || null
   }
   if (typeof v === 'object') {
@@ -126,7 +554,14 @@ export function formatOntologyCellForDisplay(v) {
       return String(v)
     }
   }
-  return String(v)
+  const s = String(v).trim()
+  if (isIsoDateTimeString(s)) return formatDateTimeDisplay(s)
+  return s
+}
+
+/** @param {unknown} v */
+export function formatOntologyCellForDisplay(v) {
+  return formatDisplayValue(v)
 }
 
 /** Best thumbnail URL for a `salesianonline.silver.final` row. */
@@ -221,7 +656,7 @@ function tryAbsoluteUrl(raw) {
 /** First usable http(s) URL from bronze row fields (PDF, image, or attachment JSON). */
 export function pickDocumentUrlFromOntologyRow(row) {
   if (!row || typeof row !== 'object') return null
-  const directKeys = ['url', 'path', 'attachment', 'image', 'feature_image', 'hasLinkedMedia', 'hasPhoto']
+  const directKeys = ['url', 'old_link', 'path', 'attachment', 'image', 'feature_image', 'hasLinkedMedia', 'hasPhoto']
 
   for (const key of directKeys) {
     const u = tryAbsoluteUrl(row[key])
@@ -257,8 +692,10 @@ export function resourceDocumentUrl(resource) {
 export function inferDocumentKindFromOntology(docUrl, row) {
   const ff = String(row?.file_format || row?.hasFileFormat || '').toLowerCase()
   const mt = String(row?.media_type || '').toLowerCase()
-  const tp = String(row?.type || '').toLowerCase()
-  const blob = `${ff} ${mt} ${tp}`
+  const tp = String(row?.type || row?.work_type || '').toLowerCase()
+  const fn = String(row?.file_name || '').toLowerCase()
+  if (/\.(jpe?g|png|gif|webp|svg|bmp|avif|tiff?)$/i.test(fn)) return 'image'
+  const blob = `${ff} ${mt} ${tp} ${fn}`
   if (blob.includes('pdf') || tp === 'application/pdf') return 'pdf'
   if (
     mt.startsWith('image/') ||
@@ -413,14 +850,116 @@ function resolveResourceCardType(row, docKind) {
   return 'Resource'
 }
 
+/** Corpus totals and freshness from gsdp.gold.vector_db_input (full-table aggregates). */
 export async function fetchOntologySummary() {
-  const url = `${apiBase()}/data/ontology/summary`
-  const res = await apiFetch(url)
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(text || res.statusText)
+  const url = `${apiBase()}/data/vector-db-input/summary`
+  try {
+    const res = await apiFetch(url)
+    if (res.ok) {
+      const body = await res.json()
+      return {
+        status: 'success',
+        total_rows: Number(body.total_rows) || 0,
+        last_ingestion: body.last_ingestion ?? null,
+        last_updated: body.last_ingestion ?? body.last_updated ?? null,
+        distinct_countries: Number(body.distinct_countries) || 0,
+        distinct_publication_types: Number(body.distinct_work_types) || 0,
+        distinct_knowledge_areas: Number(body.distinct_knowledge_areas) || 0,
+        distinct_languages: Number(body.distinct_languages) || 0,
+      }
+    }
+  } catch {
+    /* fall through */
   }
-  return res.json()
+
+  const block = await fetchVectorDbInputRows({ limit: 200, offset: 0 })
+  let lastIngestion = null
+  const types = new Set()
+  const areas = new Set()
+  const countries = new Set()
+  for (const row of block.data || []) {
+    const raw = row.created_at
+    if (raw) {
+      const t = new Date(raw).getTime()
+      if (Number.isFinite(t) && (!lastIngestion || t > new Date(lastIngestion).getTime())) {
+        lastIngestion = raw
+      }
+    }
+    const wt = coerceOntologyString(row.work_type)
+    const ka = coerceOntologyString(row.knowledge_area)
+    const c = coerceOntologyString(row.country)
+    if (wt) types.add(wt)
+    if (ka) areas.add(ka)
+    if (c) countries.add(c.toLowerCase())
+  }
+  return {
+    status: 'success',
+    total_rows: typeof block.total === 'number' ? block.total : 0,
+    last_ingestion: lastIngestion,
+    last_updated: lastIngestion,
+    distinct_countries: countries.size,
+    distinct_publication_types: types.size,
+    distinct_knowledge_areas: areas.size,
+    distinct_languages: 0,
+  }
+}
+
+/** Homepage stat display: loading ellipsis, otherwise locale number or "0". */
+export function formatHomeStatCount(value, loading = false) {
+  if (loading) return '…'
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toLocaleString() : '0'
+}
+
+/** Live KPI counts derived from vector corpus rows + summary. */
+export function buildPublicHomeStats(rows, { catalogTotal = 0, summary = null } = {}) {
+  const list = Array.isArray(rows) ? rows : []
+  const countries = new Set()
+  const languages = new Set()
+  for (const row of list) {
+    const c = coerceOntologyString(row.country || row.province_region)
+    const lang = coerceOntologyString(row.language || row.languages)
+    if (c) countries.add(c)
+    if (lang) languages.add(lang)
+  }
+  const resources =
+    typeof catalogTotal === 'number' && Number.isFinite(catalogTotal) ? catalogTotal : 0
+  return {
+    resources,
+    nations: countries.size,
+    languages: languages.size,
+    publicationTypes:
+      typeof summary?.distinct_publication_types === 'number'
+        ? summary.distinct_publication_types
+        : 0,
+    knowledgeAreas:
+      typeof summary?.distinct_knowledge_areas === 'number' ? summary.distinct_knowledge_areas : 0,
+  }
+}
+
+const HOME_DIST_BAR_CLS = ['a', 'b', 'c', 'd', 'e', 'a']
+
+/** Institution-style breakdown by work_type / category from corpus rows. */
+export function buildDistributionFromOntologyRows(rows, { limit = 6 } = {}) {
+  if (!Array.isArray(rows) || !rows.length) return []
+  const counts = new Map()
+  for (const row of rows) {
+    const lbl =
+      coerceOntologyString(row.work_type) ||
+      coerceOntologyString(row.publication_type) ||
+      coerceOntologyString(row.source_category) ||
+      'Other'
+    counts.set(lbl, (counts.get(lbl) || 0) + 1)
+  }
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit)
+  if (!sorted.length) return []
+  const max = sorted[0][1] || 1
+  return sorted.map(([lbl, num], i) => ({
+    lbl: lbl.length > 28 ? `${lbl.slice(0, 26)}…` : lbl,
+    num,
+    pct: `${Math.max(0, Math.round((num / max) * 100))}%`,
+    cls: HOME_DIST_BAR_CLS[i % HOME_DIST_BAR_CLS.length],
+  }))
 }
 
 /**
@@ -452,11 +991,21 @@ export function mapOntologyRowToResource(row, index) {
   const docUrl = pickDocumentUrlFromOntologyRow(row)
   const docKind = inferDocumentKindFromOntology(docUrl, row)
   const type = resolveResourceCardType(row, docKind)
-  const lang = coerceOntologyString(row.languages || row.translation_available) || '—'
-  const province = row.province_region || ''
-  const region = province || row.diocese || ''
-  const yRaw = row.date_published || row.publish_date || row.date_created || row.created_at || ''
-  const year = typeof yRaw === 'string' && yRaw.length >= 4 ? yRaw.slice(0, 4) : yRaw ? String(yRaw).slice(0, 4) : ''
+  const langRaw =
+    coerceOntologyString(row.language || row.languages || row.translation_available) || ''
+  const lang = langRaw ? formatLanguageDisplay(langRaw) : '—'
+  const province =
+    coerceOntologyString(row.country || row.province_region) || ''
+  const region =
+    coerceOntologyString(row.inferred_continent) ||
+    inferDashboardRegionFromText(`${province} ${row.diocese || ''}`) ||
+    ''
+  const referencePeriod = formatResourceReferencePeriod(row)
+  const publishedYear = formatResourcePublishedYear(row)
+  const year = formatResourceYearSummary(row)
+  const referenceStartYear = parseCorpusYearInt(row.reference_start_year)
+  const referenceEndYear = parseCorpusYearInt(row.reference_end_year)
+  const publishedYearInt = parseCorpusYearInt(row.publication_year)
   const desc = row.description || row.summary || row.excerpt || row.caption || ''
   const access = String(row.access_level || '').toLowerCase().includes('open') ? 'open' : 'restricted'
   const group = row.salesian_family_group || row.audience || ''
@@ -530,6 +1079,11 @@ export function mapOntologyRowToResource(row, index) {
     lang: lang || '—',
     region,
     year: year || '—',
+    referencePeriod: referencePeriod || null,
+    publishedYear: publishedYear || null,
+    referenceStartYear,
+    referenceEndYear,
+    publishedYearInt,
     province,
     tags: tags.slice(0, 12),
     group,
@@ -580,32 +1134,47 @@ function truncateStr(s, max) {
 
 const HERO_SLIDE_CLS = ['hp-s1', 'hp-s2', 'hp-s3']
 
+/** Best image URL for hero slider (corpus photo or archive header link). */
+export function pickHeroSlideImageUrl(row) {
+  if (!row || typeof row !== 'object') return null
+  const candidates = []
+  for (const key of ['url', 'old_link', 'hasPhoto', 'hasLinkedMedia', 'image', 'feature_image']) {
+    const u = tryAbsoluteUrl(row[key])
+    if (u) candidates.push(u)
+  }
+  const docUrl = pickDocumentUrlFromOntologyRow(row)
+  if (docUrl) candidates.push(docUrl)
+  for (const u of candidates) {
+    if (isUsableDynamicSlideImage(u)) return u
+  }
+  for (const u of candidates) {
+    if (/archive\.sdb\.org\/images?\//i.test(u)) return u
+  }
+  return null
+}
+
 /**
  * Build hero slider entries from ontology API rows (e.g. bronze final_table shape).
- * Prefers rows with an image URL for backgrounds; otherwise uses card gradient cover.
+ * Prefers rows with an image URL for backgrounds; static archive headers fill gaps at render time.
  */
 export function buildHeroSlidesFromOntologyRows(rows, { maxSlides = 6 } = {}) {
   if (!Array.isArray(rows) || rows.length === 0) return []
 
   const scored = rows.map((row, i) => {
-    const docUrl = pickDocumentUrlFromOntologyRow(row)
-    const kind = inferDocumentKindFromOntology(docUrl, row)
+    const imgUrl = pickHeroSlideImageUrl(row)
     let score = 0
-    if (docUrl && kind === 'image') score += 12
-    else if (docUrl && kind === 'pdf') score += 3
-    if (row.summary || row.description || row.excerpt) score += 2
+    if (imgUrl) score += 14
+    if (row.summary || row.description || row.excerpt || row.abstract) score += 2
     if (row.title || row.name) score += 1
-    return { row, i, score }
+    return { row, i, score, imgUrl }
   })
   scored.sort((a, b) => b.score - a.score)
 
   const out = []
   for (let j = 0; j < scored.length && out.length < maxSlides; j++) {
-    const { row } = scored[j]
+    const { row, imgUrl } = scored[j]
     const res = mapOntologyRowToResource(row, j)
-    const docUrl = pickDocumentUrlFromOntologyRow(row)
-    const kind = inferDocumentKindFromOntology(docUrl, row)
-    const bg = kind === 'image' && docUrl ? docUrl : null
+    const bg = imgUrl || null
 
     const tags = [...(res.tags || [])]
     const chips = tags
@@ -650,32 +1219,17 @@ export function buildHeroSlidesFromOntologyRows(rows, { maxSlides = 6 } = {}) {
       placeholder: `Search the corpus for “${truncateStr(titleText, 44)}”…`,
       cta: 'Explore →',
       chips: finalChips,
-      docUrl: docUrl || null,
+      docUrl: pickDocumentUrlFromOntologyRow(row) || imgUrl || null,
     })
   }
   return out
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-/** “Latest from the field” list items from ontology rows. */
-export function buildNewsItemsFromOntologyRows(rows, { skip = 0, limit = 5 } = {}) {
-  if (!Array.isArray(rows) || rows.length === 0) return []
-  return rows.slice(skip, skip + limit).map((row, i) => {
-    const res = mapOntologyRowToResource(row, i)
-    const ymd = String(row.publish_date || row.updated_at || row.ingestion_time || '').trim()
-    let d = '—'
-    let m = ''
-    if (ymd.length >= 10) {
-      d = ymd.slice(8, 10)
-      const mi = parseInt(ymd.slice(5, 7), 10)
-      if (mi >= 1 && mi <= 12) m = MONTHS[mi - 1]
-    }
-    const loc = truncateStr([res.province, res.publisher].filter(Boolean).join(' · '), 48) || 'Library'
-    const head = truncateStr(res.title, 130)
-    const tag = truncateStr(res.type || 'Resource', 28)
-    return { key: res.id, d, m, loc, head, tag }
-  })
+/**
+ * News list for “Latest from the field”. Returns empty until a dedicated news feed is wired.
+ */
+export function buildNewsItemsFromOntologyRows(_rows, { skip: _skip = 0, limit: _limit = 5 } = {}) {
+  return []
 }
 
 /** Trending-style lines from repeated tags/keywords in recent rows. */
@@ -690,13 +1244,14 @@ export function buildTrendingFromOntologyRows(rows, { limit = 4 } = {}) {
       counts.set(k, (counts.get(k) || 0) + 1)
     }
   }
-  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([q]) => q)
-  const petals = ['+42%', '+28%', '+19%', '→ steady']
-  return sorted.slice(0, limit).map((q, i) => ({
-    q,
-    ct: petals[i % petals.length],
-    up: i < 3,
-  }))
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([q, count]) => ({
+      q,
+      ct: String(count),
+      up: false,
+    }))
 }
 
 /** Curated-style collection cards grouped by source category / knowledge area. */
@@ -749,23 +1304,17 @@ export function formatOntologyFreshness(summary) {
   if (!summary || typeof summary !== 'object') return null
   const raw = summary.last_ingestion || summary.last_updated
   if (!raw) return null
-  try {
-    const d = new Date(raw)
-    if (Number.isNaN(d.getTime())) return String(raw).slice(0, 16)
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-  } catch {
-    return null
-  }
+  const formatted = formatDateTimeDisplay(raw, { withTime: true })
+  return formatted || null
 }
 
 /** Short relative label for activity feeds (ingestion / updated timestamps). */
 export function formatRelativeTime(iso) {
   if (!iso) return 'Recently'
   const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return String(iso).slice(0, 16)
+  if (Number.isNaN(t)) return formatDateTimeDisplay(iso) || String(iso).slice(0, 16)
   const diffMs = Date.now() - t
-  if (diffMs < 0)
-    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  if (diffMs < 0) return formatDateTimeDisplay(iso, { withTime: true })
   const mins = Math.floor(diffMs / 60000)
   if (mins < 1) return 'Just now'
   if (mins < 60) return `${mins}m ago`
@@ -773,7 +1322,7 @@ export function formatRelativeTime(iso) {
   if (hrs < 24) return `${hrs}h ago`
   const days = Math.floor(hrs / 24)
   if (days < 14) return `${days}d ago`
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return formatDateTimeDisplay(iso, { withTime: false })
 }
 
 const DASH_ACTIVITY_DOTS = ['dot-green', 'dot-blue', 'dot-gold', 'dot-red']
@@ -822,9 +1371,6 @@ export function buildDashboardSpotlightSlides(rows, { maxSlides = 6 } = {}) {
 }
 
 /** Collection grid tiles derived from ontology rows (grouped categories). */
-const EVENT_KEYWORD_RE =
-  /\b(event|congress|retreat|gathering|symposium|workshop|chapter|wyd|jornada|assembly|mela|fair|summit|forum|convention|seminar|council|plenary|celebration|festival|visibility day)\b/i
-
 const INST_KEYWORD_RE =
   /\b(school|college|university|polytechnic|centre|center|oratory|hostel|parish|province|institute|academy|social work|youth|formation|campus|house|ngo|community|bread|don bosco)\b/i
 
@@ -860,65 +1406,9 @@ function inferSalesianGroupFromRow(row) {
   return 'SDB'
 }
 
-function inferEventTypeFromBlob(title, typeLabel) {
-  const blob = `${title} ${typeLabel}`.toLowerCase()
-  if (/retreat|spiritual/.test(blob)) return { type: 'ev-retreat', typeName: 'Retreat' }
-  if (/congress|convention|plenary|assembly|summit|forum|necdb|conference/.test(blob)) {
-    return { type: 'ev-congress', typeName: 'Congress' }
-  }
-  if (/mission|mela|fair|job/.test(blob)) return { type: 'ev-mission', typeName: 'Mission Event' }
-  return { type: 'ev-youth', typeName: 'Youth Gathering' }
-}
-
-/** Event cards for dashboard — keyword / date–based slice of ontology rows. */
-export function buildDashboardEventsFromOntologyRows(rows, { limit = 48 } = {}) {
-  if (!Array.isArray(rows) || !rows.length) return []
-  const keywordHits = rows.filter((row) => {
-    const blob = `${row.title || ''} ${row.summary || ''} ${row.source_category || ''} ${row.publication_type || ''} ${row.tags || ''} ${row.keywords || ''}`
-    return EVENT_KEYWORD_RE.test(blob)
-  })
-  const pool =
-    keywordHits.length >= 3
-      ? keywordHits
-      : rows.filter((r) => String(r.publish_date || r.updated_at || r.ingestion_time || '').length >= 8)
-  const sorted = [...pool].sort((a, b) => {
-    const da = new Date(a.publish_date || a.ingestion_time || a.updated_at || 0).getTime()
-    const db = new Date(b.publish_date || b.ingestion_time || b.updated_at || 0).getTime()
-    return db - da
-  })
-
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  return sorted.slice(0, limit).map((row, idx) => {
-    const res = mapOntologyRowToResource(row, idx)
-    const ymd = String(row.publish_date || row.updated_at || row.ingestion_time || '').trim().slice(0, 10)
-    let date = '—'
-    let mon = '···'
-    if (ymd.length >= 10) {
-      date = ymd.slice(8, 10)
-      const mi = parseInt(ymd.slice(5, 7), 10)
-      if (mi >= 1 && mi <= 12) mon = months[mi - 1]
-    }
-    const regionBlob = `${row.province_region || ''} ${row.publisher || ''} ${res.title}`
-    const region = inferDashboardRegionFromText(regionBlob) || 'South Asia'
-    const { type, typeName } = inferEventTypeFromBlob(res.title, res.type)
-    const coll = coerceOntologyString(row.source_category)
-
-    return {
-      id: res.id,
-      grp: inferSalesianGroupFromRow(row),
-      title: res.title,
-      date,
-      mon,
-      type,
-      typeName,
-      location: truncateStr([row.province_region, row.publisher].filter(Boolean).join(' · ') || row.publisher || '—', 88),
-      region,
-      org: row.publisher || res.publisher || '—',
-      participants: 40 + (idx % 140) * 11,
-      desc: truncateStr(String(res.desc || row.summary || row.excerpt || '').trim() || res.title, 220),
-      coll: coll || '',
-    }
-  })
+/** Event cards for dashboard. Returns empty until a dedicated events calendar is wired. */
+export function buildDashboardEventsFromOntologyRows(_rows, { limit: _limit = 48 } = {}) {
+  return []
 }
 
 function normalizePersonDedupeKey(s) {
@@ -988,7 +1478,7 @@ export function buildDashboardPersonsFromOntologyRows(rows, { limit = 36 } = {})
       region,
       aff: inferSalesianGroupFromRow(row),
       pubs: 1 + (out.length % 52),
-      evts: 1 + (out.length % 41),
+      evts: 0,
       vis: 'public',
       province: extractProvinceCodeFromRegion(row.province_region) || String(res.province || '').slice(0, 8) || '—',
     })

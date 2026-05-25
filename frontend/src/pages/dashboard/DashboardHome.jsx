@@ -126,6 +126,18 @@ export function DashboardHome() {
           rows[i] = { ...rows[i], val: t }
         }
       }
+      if (typeof ontologySummary.distinct_countries === 'number') {
+        const n = ontologySummary.distinct_countries.toLocaleString()
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i].lbl === 'Mission locations') {
+            rows[i] = {
+              ...rows[i],
+              val: n,
+              tr: ontologySummary.distinct_countries === 1 ? 'Country in corpus' : 'Countries in corpus',
+            }
+          }
+        }
+      }
     }
     if (role === 'provincial' && session?.region) {
       return rows.map((s, idx) =>
@@ -142,7 +154,7 @@ export function DashboardHome() {
       ; (async () => {
         try {
           const [ont, sum] = await Promise.all([
-            fetchOntologyRows({ limit: 24, offset: 0 }),
+            fetchOntologyRows({ limit: 48, offset: 0 }),
             fetchOntologySummary().catch(() => null),
           ])
           if (cancelled) return
@@ -255,7 +267,7 @@ export function DashboardHome() {
 
       <div className="mb-6 grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4" aria-busy={!ontologyLoaded || undefined}>
         {!ontologyLoaded
-          ? stats.map((s, i) => (
+          ? (ROLE_STATS[role] || ROLE_STATS.registered).map((s, i) => (
             <DashboardKpiCardSkeleton
               key={`role-skel-${i}`}
               orangeTop={String(s.bg).toLowerCase().includes('orange')}

@@ -1,7 +1,7 @@
 from datetime import timedelta
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from auth import databricks_auth as db_auth
 from auth.security import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_password_hash, verify_password
@@ -12,6 +12,7 @@ from schemas.user import (
     RoleResponse,
     RoleUpdate,
     UserCreate,
+    UserListResponse,
     UserLogin,
     UserResponse,
     UserUpdate,
@@ -119,6 +120,43 @@ def login_user(user_credentials: UserLogin):
         "token_type": "bearer",
         "user": _to_user_response(user),
     }
+
+
+@router.get("/users", response_model=UserListResponse)
+def list_auth_users(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    q: Optional[str] = Query(
+        None,
+        max_length=200,
+        description="Search username, email, region, or role name",
+    ),
+):
+    """Paginated users from Unity Catalog (no password hashes)."""
+    try:
+        result = db_auth.list_users(limit=limit, offset=offset, search=q)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Databricks users unavailable: {e}") from e
+    users = [_to_user_response(u) for u in result["data"]]
+    return UserListResponse(
+        count=len(users),
+        total=int(result["total"]),
+        limit=limit,
+        offset=offset,
+        data=users,
+    )
+
+
+@router.get("/users/{user_id}", response_model=UserResponse)
+def get_auth_user(user_id: int):
+    """Return one user from Unity Catalog (no password hash)."""
+    try:
+        user = db_auth.get_user_by_id(user_id)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Databricks user lookup failed: {e}") from e
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _to_user_response(user)
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)

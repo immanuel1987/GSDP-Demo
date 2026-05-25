@@ -4,17 +4,23 @@ import { AiAssistantDock } from '../components/AiAssistantDock'
 import { scrollToSection } from '../lib/scrollTo'
 import { publicDiscoverLinks, publicNetworkFooterLinks, footerProvinces } from '../data/footerData'
 import {
-  buildCollectionCardsFromOntologyRows,
+  buildDistributionFromOntologyRows,
   buildHeroSlidesFromOntologyRows,
-  buildNewsItemsFromOntologyRows,
+  buildPublicHomeStats,
   buildRecentPdfResourcesFromOntologyRows,
   buildTrendingFromOntologyRows,
   fetchOntologyRows,
   fetchOntologySummary,
+  formatHomeStatCount,
   formatOntologyFreshness,
   ragAssistantUrl,
 } from '../lib/ontologyApi'
 import gsdpIntroVideoUrl from '../assets/viedo/AI_Platform_Video_Generation_Request.mp4'
+import {
+  HOME_HERO_STATIC_IMAGES,
+  applyHeroSlideImages,
+  heroSlideImageSrc,
+} from '../data/homeStaticImages'
 import { ResourceDetailModal } from './dashboard/dashboardViews'
 import './PublicHomePage.css'
 
@@ -39,11 +45,11 @@ function navigateLoginNext(navigate, nextPath) {
   navigate('/login', { state: { next: nextPath } })
 }
 
-/** Hero slider data only — independent of recent-resource card selection. */
+/** Hero from API rows; static archive headers when a slide has no usable photo. */
 function buildPublicHomeHeroSlides(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return null
   const built = buildHeroSlidesFromOntologyRows(rows, { maxSlides: 6 })
-  return built.length ? built : null
+  return built.length ? applyHeroSlideImages(built) : null
 }
 
 /** Recent resources strip: PDF documents only, newest first. */
@@ -51,97 +57,38 @@ function buildPublicHomeRecentPdfResources(rows) {
   return buildRecentPdfResourcesFromOntologyRows(rows, { limit: 4 })
 }
 
-// ── Fallback slide data (when API is empty or unreachable) ─────────────────
-const FALLBACK_HERO_SLIDES = [
-  {
-    cls: 'hp-s1',
-    bg: 'https://archive.sdb.org/images/headers/cabeceraInterior3.jpg',
-    bgPos: 'center 30%',
-    label: 'Welcome · Strenna 2026 · "Do Whatever He Tells You"',
-    title: <>Don Bosco's mission,<br /><em>alive in every search.</em></>,
-    lead: 'The Salesian intellectual and pastoral heritage — open, searchable, and connected. 12,847 resources across 136 nations, 261 schools, and 174 youth-at-risk centres.',
-    placeholder: 'Search the corpus or ask in natural language…',
-    cta: 'Search →',
-    chips: ['Preventive System in Latin America 1950–1970', 'Youth at Risk · South Asia', 'Don Bosco educator method'],
-  },
-  {
-    cls: 'hp-s2',
-    bg: 'https://archive.sdb.org/images/headers/cabeceraInterior2.jpg',
-    bgPos: 'center center',
-    label: 'Rector Major · Fr. Fabio Attard',
-    title: (
-      <>
-        <span className="hp-hero-worldline">
-          <span className="hp-hero-world-n">136 nations</span>.
-        </span>
-        <br />
-        <em>One Salesian heart.</em>
-      </>
-    ),
-    lead: 'Elected on 25 March 2025, the 11th Successor of Don Bosco leads 13,750 Salesians in 92 provinces serving the poorest and most vulnerable young people worldwide.',
-    placeholder: 'Try: "How did Don Bosco approach urban poverty in 19th century Turin?"',
-    cta: 'Explore →',
-    chips: ['Compare two encyclicals', 'Summarise the 29th General Chapter', 'Show me primary sources from 1888'],
-  },
-  {
-    cls: 'hp-s3',
-    bg: 'https://archive.sdb.org/images/headers/cabeceraInterior5.jpg',
-    bgPos: 'center 32%',
-    label: 'South Asia Pilot · 12 Provinces · 192 Hostels',
-    title: <>Built in Bengaluru.<br /><em>Scaling to 92 provinces.</em></>,
-    lead: 'Coordinated by the Don Bosco South Asia digital team and developed under the GC29 mandate. Now serving 261 schools and 174 youth-at-risk centres across India, Sri Lanka, Bangladesh, and Nepal.',
-    placeholder: 'Explore South Asia institutions, programmes, and stories…',
-    cta: 'Explore →',
-    chips: ['Bangalore Province', 'Sri Lanka Vice-Province', 'Tribal mission archives · Northeast'],
-  },
-]
+/** Image-only slides when the catalog API is unavailable (no static copy). */
+const FALLBACK_HERO_SLIDES = applyHeroSlideImages([
+  { cls: 'hp-s1', bg: HOME_HERO_STATIC_IMAGES[0], bgPos: 'center 30%' },
+  { cls: 'hp-s2', bg: HOME_HERO_STATIC_IMAGES[1], bgPos: 'center center' },
+  { cls: 'hp-s3', bg: HOME_HERO_STATIC_IMAGES[2], bgPos: 'center 32%' },
+])
 
-const FALLBACK_NEWS = [
-  { key: 'n1', d: '17', m: 'Mar', loc: 'South Asia · Mumbai', head: 'SYMLEAD strengthens youth leadership and collaboration training', tag: 'Youth Ministry' },
-  { key: 'n2', d: '15', m: 'Mar', loc: 'South Asia · Siliguri', head: 'LuvlyU launched to inspire mental wellness among peers', tag: 'Mental Health' },
-  { key: 'n3', d: '14', m: 'Mar', loc: 'South Asia · Assam', head: 'Disaster preparedness boosted in Morigaon — SAFE Initiative', tag: 'Social Development' },
-  { key: 'n4', d: '11', m: 'Mar', loc: 'Europe · Turin', head: '29th General Chapter publishes final guidelines on formation', tag: 'Formation' },
-  { key: 'n5', d: '08', m: 'Mar', loc: 'South Asia · Chennai', head: 'Don Bosco Theological Centre hosts provincial study week', tag: 'General Salesian Resource' },
-]
-
-const FALLBACK_TRENDING = [
-  { key: 't1', q: 'Preventive system in education', ct: '+42%', up: true },
-  { key: 't2', q: 'Strenna 2026 commentary', ct: '+28%', up: true },
-  { key: 't3', q: 'Youth ministry post-pandemic', ct: '+19%', up: true },
-  { key: 't4', q: 'Salesian Bulletin · 1877 archive', ct: '→ steady', up: false },
-]
-
-const FALLBACK_COLLECTIONS = [
-  { key: 'c1', cls: 'hp-c1', tag: 'Historical', ti: 'The Legacy of Michele Rua', ct: '47 resources' },
-  { key: 'c2', cls: 'hp-c2', tag: 'Thematic', ti: 'Salesian Bulletin · Century Archive', ct: '1,200+ issues' },
-  { key: 'c3', cls: 'hp-c3', tag: 'Regional', ti: 'Social Works in Latin America', ct: '89 resources' },
-  { key: 'c4', cls: 'hp-c4', tag: 'Pedagogy', ti: 'The Preventive System Today', ct: '63 resources' },
-  { key: 'c5', cls: 'hp-c5', tag: 'Youth Ministry', ti: 'World Youth Day · Salesian Presence', ct: '38 resources' },
-  { key: 'c6', cls: 'hp-c6', tag: 'Formation', ti: 'Initial Formation · Global Standards', ct: '72 resources' },
-]
-
-function slideBackgroundStyle(s) {
-  if (s.bg) {
-    return {
-      backgroundImage: `url(${s.bg})`,
-      backgroundSize: 'cover',
-      backgroundPosition: s.bgPos || 'center center',
-    }
-  }
-  if (s.coverCss) {
-    return {
-      background: s.coverCss,
-      backgroundSize: 'cover',
-      backgroundPosition: 'center center',
-    }
-  }
-  return undefined
+function HeroSlidePhoto({ slide, index, eager }) {
+  const imgSrc = heroSlideImageSrc(slide, index)
+  const imgPos = slide?.bgPos || 'center center'
+  return (
+    <>
+      <img
+        className="hp-slide-photo"
+        src={imgSrc}
+        alt=""
+        width={1920}
+        height={820}
+        loading={eager ? 'eager' : 'lazy'}
+        fetchPriority={eager ? 'high' : 'auto'}
+        style={{ objectPosition: imgPos }}
+      />
+    </>
+  )
 }
 
 // ── Hero Slider ──────────────────────────────────────────────────────────────
 function HeroSlider({ slides: slidesProp, loading }) {
-  const slidesForRender = slidesProp?.length ? slidesProp : FALLBACK_HERO_SLIDES
-  const slideCount = loading ? 1 : slidesForRender.length
+  const slidesForRender = applyHeroSlideImages(
+    slidesProp?.length ? slidesProp : FALLBACK_HERO_SLIDES,
+  )
+  const slideCount = slidesForRender.length
 
   const [idx, setIdx] = useState(0)
   const [overviewOpen, setOverviewOpen] = useState(false)
@@ -162,18 +109,23 @@ function HeroSlider({ slides: slidesProp, loading }) {
 
   const resetTimer = useCallback(() => {
     clearInterval(timerRef.current)
-    if (loading || slideCount < 2) return
+    if (slideCount < 2) return
     timerRef.current = setInterval(() => go(), 5000)
-  }, [go, loading, slideCount])
+  }, [go, slideCount])
 
   useEffect(() => {
-    if (loading || slideCount < 2) {
+    if (slideCount < 2) {
       clearInterval(timerRef.current)
       return undefined
     }
     resetTimer()
     return () => clearInterval(timerRef.current)
-  }, [resetTimer, loading, slideCount])
+  }, [resetTimer, slideCount])
+
+  useEffect(() => {
+    if (!loading) return
+    setIdx(0)
+  }, [loading])
 
   useEffect(() => {
     if (!overviewOpen) return undefined
@@ -197,31 +149,24 @@ function HeroSlider({ slides: slidesProp, loading }) {
 
   const pause = () => clearInterval(timerRef.current)
 
-  if (loading) {
-    return (
-      <div className="hp-hero-l hp-hero-loading" aria-busy="true" aria-label="Loading featured catalog">
-        <div className="hp-slides">
-          <div
-            className="hp-slide hp-s1 active"
-            style={{ background: 'linear-gradient(135deg,#003559 0%,#004a99 55%,#1f6eb8 100%)' }}
-          >
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="hp-hero-l" ref={heroRef} onMouseEnter={pause} onMouseLeave={resetTimer}>
+    <div
+      className={`hp-hero-l${loading ? ' hp-hero-loading' : ''}`}
+      ref={heroRef}
+      onMouseEnter={pause}
+      onMouseLeave={resetTimer}
+      aria-busy={loading || undefined}
+    >
       <div className="hp-slides">
         {slidesForRender.map((s, k) => {
-          const bgStyle = slideBackgroundStyle(s)
+          const isActive = idx === k
           return (
             <div
-              key={s.key ?? k}
-              className={`hp-slide ${s.cls}${idx === k ? ' active' : ''}`}
-              style={bgStyle}
+              key={s.key ?? `slide-${k}`}
+              className={`hp-slide ${s.cls}${isActive ? ' active' : ''} hp-slide--has-photo`}
+              aria-hidden={!isActive}
             >
+              <HeroSlidePhoto slide={s} index={k} eager={k === 0} />
             </div>
           )
         })}
@@ -497,7 +442,7 @@ export function PublicHomePage() {
       ; (async () => {
         try {
           const [ont, sum] = await Promise.all([
-            fetchOntologyRows({ limit: 32, offset: 0 }),
+            fetchOntologyRows({ limit: 80, offset: 0 }),
             fetchOntologySummary().catch(() => null),
           ])
           if (cancelled) return
@@ -519,46 +464,78 @@ export function PublicHomePage() {
 
   const homeRows = ontologyBlock?.data
   const catalogTotal =
-    typeof ontologyBlock?.total === 'number'
+    homeFetchDone && typeof ontologyBlock?.total === 'number'
       ? ontologyBlock.total
-      : typeof ontologySummary?.total_rows === 'number'
+      : homeFetchDone && typeof ontologySummary?.total_rows === 'number'
         ? ontologySummary.total_rows
-        : null
-  const catalogTotalLabel =
-    !homeFetchDone
-      ? '…'
-      : catalogTotal != null && Number.isFinite(catalogTotal)
-        ? catalogTotal.toLocaleString()
-        : '—'
+        : 0
+  const catalogTotalLabel = formatHomeStatCount(catalogTotal, !homeFetchDone)
 
-  const heroSlides = useMemo(() => buildPublicHomeHeroSlides(homeRows), [homeRows])
+  const homeStats = useMemo(() => {
+    if (!homeFetchDone) return null
+    return buildPublicHomeStats(homeRows, {
+      catalogTotal,
+      summary: ontologySummary,
+    })
+  }, [homeFetchDone, homeRows, catalogTotal, ontologySummary])
+
+  const distributionRows = useMemo(() => {
+    if (!homeFetchDone) return []
+    return buildDistributionFromOntologyRows(homeRows, { limit: 6 })
+  }, [homeFetchDone, homeRows])
+
+  const distributionTotal = useMemo(() => {
+    if (!distributionRows.length) return 0
+    return distributionRows.reduce((sum, r) => sum + (Number(r.num) || 0), 0)
+  }, [distributionRows])
+
+  const heroSlides = useMemo(() => {
+    if (!homeFetchDone) return null
+    if (!ontologyBlock || !Array.isArray(homeRows) || homeRows.length === 0) return null
+    return buildPublicHomeHeroSlides(homeRows)
+  }, [homeFetchDone, ontologyBlock, homeRows])
 
   const recentPdfResources = useMemo(() => {
     if (!homeFetchDone) return []
     return buildPublicHomeRecentPdfResources(Array.isArray(homeRows) ? homeRows : [])
   }, [homeFetchDone, homeRows])
 
-  const newsItems = useMemo(() => {
-    if (!homeFetchDone) return []
-    if (!Array.isArray(homeRows) || homeRows.length === 0) return FALLBACK_NEWS
-    const n = buildNewsItemsFromOntologyRows(homeRows, { skip: 8, limit: 5 })
-    return n.length ? n : FALLBACK_NEWS
-  }, [homeFetchDone, homeRows])
+  /** No news API yet — counts stay at zero (not inferred from catalog rows). */
+  const newsStoryCount = 0
+  const newsNationCount = 0
 
   const trendingItems = useMemo(() => {
-    if (!homeFetchDone) return []
-    if (!Array.isArray(homeRows) || homeRows.length === 0) return FALLBACK_TRENDING
+    if (!homeFetchDone || !Array.isArray(homeRows) || homeRows.length === 0) return []
     const t = buildTrendingFromOntologyRows(homeRows, { limit: 4 })
-    if (!t.length) return FALLBACK_TRENDING
     return t.map((row, i) => ({ ...row, key: `tr-${i}-${row.q}` }))
   }, [homeFetchDone, homeRows])
 
-  const collectionCards = useMemo(() => {
-    if (!homeFetchDone) return []
-    if (!Array.isArray(homeRows) || homeRows.length === 0) return FALLBACK_COLLECTIONS
-    const c = buildCollectionCardsFromOntologyRows(homeRows, { limit: 6 })
-    return c.length ? c : FALLBACK_COLLECTIONS
-  }, [homeFetchDone, homeRows])
+  const liveStatCells = useMemo(() => {
+    const s = homeStats
+    return [
+      {
+        v: formatHomeStatCount(s?.resources ?? 0, !homeFetchDone),
+        k: 'Resources',
+        d: formatHomeStatCount(s?.resources ?? 0, false),
+      },
+      {
+        v: formatHomeStatCount(s?.nations ?? 0, !homeFetchDone),
+        k: 'Nations',
+        d: formatHomeStatCount(s?.nations ?? 0, false),
+        world: true,
+      },
+      {
+        v: formatHomeStatCount(s?.knowledgeAreas ?? 0, !homeFetchDone),
+        k: 'Knowledge areas',
+        d: formatHomeStatCount(s?.knowledgeAreas ?? 0, false),
+      },
+      {
+        v: formatHomeStatCount(s?.languages ?? 0, !homeFetchDone),
+        k: 'Languages',
+        d: formatHomeStatCount(s?.languages ?? 0, false),
+      },
+    ]
+  }, [homeStats, homeFetchDone])
 
   const liveUpdated = formatOntologyFreshness(ontologySummary)
 
@@ -573,7 +550,10 @@ export function PublicHomePage() {
               <span><b>Open Knowledge</b></span>
               <span>South Asia Pilot</span>
               <span>Strenna 2026</span>
-              <span>136 nations · 1,703 houses</span>
+              <span>
+                {formatHomeStatCount(homeStats?.nations ?? 0, !homeFetchDone)} nations ·{' '}
+                {formatHomeStatCount(homeStats?.resources ?? 0, !homeFetchDone)} resources
+              </span>
             </div>
             <div className="hp-util-r">
               <a className="on">EN</a><a>IT</a><a>ES</a><a>PT</a><a>FR</a>
@@ -632,51 +612,21 @@ export function PublicHomePage() {
         <section className="hp-hero-section" id="hp-section-hero">
           <div className="hp-hero-slider-bleed">
             <HeroSlider
-              key={!homeFetchDone ? 'hero-loading' : heroSlides?.length ? 'hero-ontology' : 'hero-fallback'}
+              key={heroSlides?.length ? 'hero-ontology' : 'hero-fallback'}
               loading={!homeFetchDone}
-              slides={homeFetchDone ? (heroSlides ?? undefined) : undefined}
+              slides={heroSlides ?? undefined}
             />
           </div>
 
           <div className="hp-hero-sub" id="hp-section-live">
             <div className="hp-hero-r">
-              {/* Rector card */}
-              <div className="hp-rector">
-                {!homeFetchDone ? (
-                  <>
-                    <div className="hp-rector-av hp-rector-av--skeleton" aria-hidden />
-                    <div className="hp-rector-info hp-data-loading" aria-busy="true">
-                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--sm" />
-                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--title" />
-                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--xs" />
-                    </div>
-                    <div className="hp-rector-actions hp-data-loading" aria-hidden>
-                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--action" />
-                      <div className="hp-skel-line hp-skel-on-light hp-skel-line--action hp-skel-line--action-narrow" />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="hp-rector-av">FA</div>
-                    <div className="hp-rector-info">
-                      <div className="role">Rector Major · 11th Successor</div>
-                      <h3>Fr. Fabio Attard</h3>
-                      <div className="since">Since 25 Mar 2025 · Term 2025–2031</div>
-                    </div>
-                    <div className="hp-rector-actions">
-                      <a>Biography ↗</a>
-                      <a>Chapter docs ↗</a>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Live stack */}
               <div className="hp-live-stack">
                 <div className="hp-live">
                   <div className="hp-live-h">
                     <span className="hp-live-lbl">Live Knowledge Base</span>
-                    <span className="hp-live-upd">{liveUpdated ? `Index · ${liveUpdated}` : 'Updated today'}</span>
+                    <span className="hp-live-upd">
+                      {liveUpdated ? `Index · ${liveUpdated}` : homeFetchDone ? 'Index · 0' : '…'}
+                    </span>
                   </div>
                   <div className="hp-live-grid">
                     {!homeFetchDone ? (
@@ -688,12 +638,7 @@ export function PublicHomePage() {
                         </div>
                       ))
                     ) : (
-                      [
-                        { v: catalogTotalLabel, k: 'Resources', d: 'Catalogued in ontology' },
-                        { v: '136', k: 'Nations', d: "+2 since '24", world: true },
-                        { v: '13,750', k: 'Salesians', d: 'GC29 census' },
-                        { v: '5', k: 'Languages', d: 'EN·IT·ES·PT·FR' },
-                      ].map((c, i) => (
+                      liveStatCells.map((c, i) => (
                         <div key={i} className={`hp-live-cell${c.world ? ' hp-live-cell--world' : ''}`}>
                           <div className="v">{c.v}</div>
                           <div className="k">{c.k}</div>
@@ -721,6 +666,8 @@ export function PublicHomePage() {
                           </div>
                         ))}
                       </div>
+                    ) : trendingItems.length === 0 ? (
+                      <p className="hp-empty-hint">0 trending topics in the current catalog sample.</p>
                     ) : (
                       trendingItems.map((t, i) => (
                         <div
@@ -764,7 +711,10 @@ export function PublicHomePage() {
             <div className="hp-panel-h">
               <div>
                 <div className="hp-panel-title">Latest from the field</div>
-                <div className="hp-panel-sub">News agency · 136 nations</div>
+                <div className="hp-panel-sub">
+                  {formatHomeStatCount(newsStoryCount, !homeFetchDone)} stories ·{' '}
+                  {formatHomeStatCount(newsNationCount, !homeFetchDone)} nations
+                </div>
               </div>
               <a
                 className="hp-panel-all"
@@ -798,28 +748,7 @@ export function PublicHomePage() {
                   ))}
                 </div>
               ) : (
-                newsItems.map((n, i) => (
-                  <div
-                    key={n.key ?? i}
-                    className="hp-news-item"
-                    role="button"
-                    tabIndex={0}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        navigateLoginNext(navigate, '/dashboard/resources')
-                      }
-                    }}
-                  >
-                    <div className="hp-news-date"><div className="d">{n.d}</div><div className="m">{n.m}</div></div>
-                    <div className="hp-news-body">
-                      <div className="loc">{n.loc}</div>
-                      <div className="head">{n.head}</div>
-                    </div>
-                  </div>
-                ))
+                <p className="hp-empty-hint">0 news stories — news feed not connected yet.</p>
               )}
             </div>
           </div>
@@ -829,7 +758,9 @@ export function PublicHomePage() {
             <div className="hp-panel-h">
               <div>
                 <div className="hp-panel-title">Where the work happens</div>
-                <div className="hp-panel-sub">7,240 institutions · by type</div>
+                <div className="hp-panel-sub">
+                  {formatHomeStatCount(distributionTotal, !homeFetchDone)} items · by type
+                </div>
               </div>
               <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
                 Map →
@@ -846,28 +777,23 @@ export function PublicHomePage() {
                     </div>
                   ))}
                 </div>
+              ) : distributionRows.length === 0 ? (
+                <p className="hp-empty-hint">0 items to show by type.</p>
               ) : (
-                [
-                  { lbl: 'DB Schools', pct: '78%', cls: 'a', num: '261' },
-                  { lbl: 'Parishes', pct: '52%', cls: 'b', num: '174' },
-                  { lbl: 'Youth-at-Risk', pct: '52%', cls: 'c', num: '174' },
-                  { lbl: 'Technical Inst.', pct: '41%', cls: 'd', num: '138' },
-                  { lbl: 'Formation', pct: '17%', cls: 'e', num: '57' },
-                  { lbl: 'Colleges', pct: '15%', cls: 'a', num: '51' },
-                ].map((r, i) => (
-                  <div key={i} className="hp-dist-row">
+                distributionRows.map((r, i) => (
+                  <div key={`${r.lbl}-${i}`} className="hp-dist-row">
                     <div className="hp-dist-lbl">{r.lbl}</div>
                     <DistBar pct={r.pct} cls={r.cls} />
-                    <div className="hp-dist-num">{r.num}</div>
+                    <div className="hp-dist-num">{formatHomeStatCount(r.num, false)}</div>
                   </div>
                 ))
               )}
             </div>
             <div className="hp-dist-foot">
               <div className="hp-dist-foot-l">
-                <strong>South Asia Pilot</strong>
+                <strong>Corpus breakdown</strong>
                 <span className="hp-dist-sep">/</span>
-                <span>12 provinces</span>
+                <span>{formatHomeStatCount(distributionRows.length, !homeFetchDone)} types</span>
               </div>
               <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
                 Full directory →
@@ -880,7 +806,9 @@ export function PublicHomePage() {
             <div className="hp-panel-h">
               <div>
                 <div className="hp-panel-title">Global presence</div>
-                <div className="hp-panel-sub">1,703 communities active</div>
+                <div className="hp-panel-sub">
+                  {formatHomeStatCount(homeStats?.nations ?? 0, !homeFetchDone)} countries in index
+                </div>
               </div>
               <button type="button" className="hp-panel-all" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')}>
                 Explore map →
@@ -899,7 +827,12 @@ export function PublicHomePage() {
                 <span><span className="hp-map-dot" style={{ background: '#1a8a6e' }} />Active</span>
                 <span><span className="hp-map-dot" style={{ background: '#c9a227' }} />Mission</span>
               </div>
-              <span><strong style={{ color: '#0b1733' }}>92</strong> provinces</span>
+              <span>
+                <strong style={{ color: '#0b1733' }}>
+                  {formatHomeStatCount(homeStats?.publicationTypes ?? 0, !homeFetchDone)}
+                </strong>{' '}
+                publication types
+              </span>
             </div>
           </div>
         </section>
@@ -911,7 +844,9 @@ export function PublicHomePage() {
           <div className="hp-res-h">
             <div>
               <h2>Recent resources</h2>
-              <div className="sub">Latest PDF documents catalogued on the platform</div>
+              <div className="sub">
+                {formatHomeStatCount(recentPdfResources.length, !homeFetchDone)} PDF documents in sample
+              </div>
             </div>
             <button type="button" className="hp-col-all" onClick={() => navigateLoginNext(navigate, '/dashboard/resources')}>
               See more →
@@ -931,15 +866,17 @@ export function PublicHomePage() {
                 <div key={r.id} className="hp-res-card" onClick={() => setSelectedResource(r)}>
                   <div className="ti">{r.title}</div>
                   <div className="ct">
-                    {r.author && r.author !== '—' ? r.author :
-                      r.publisher ? r.publisher :
-                        'Don Bosco South Asia'}
+                    {r.author && r.author !== '—'
+                      ? r.author
+                      : r.publisher && r.publisher !== '—'
+                        ? r.publisher
+                        : '—'}
                   </div>
                 </div>
               ))
             ) : (
-              <div className="hp-res-card" style={{ gridColumn: '1 / -1', textAlign: 'center', color: '#5a7aa0' }}>
-                No PDF resources available at the moment.
+              <div className="hp-res-card hp-res-card--empty" style={{ gridColumn: '1 / -1' }}>
+                0 PDF resources in the current catalog sample.
               </div>
             )}
           </div>
@@ -952,7 +889,11 @@ export function PublicHomePage() {
           <div className="hp-foot-card">
             <div className="hp-foot-about" id="hp-foot-about">
               <h4>About the Platform</h4>
-              <p>Open-access knowledge platform of the Salesians of Don Bosco. Built for scholars, educators, ministers, and the curious — semantic AI search across 5 languages.</p>
+              <p>
+                Open-access knowledge platform of the Salesians of Don Bosco. Indexed corpus:{' '}
+                {formatHomeStatCount(homeStats?.resources ?? 0, !homeFetchDone)} resources across{' '}
+                {formatHomeStatCount(homeStats?.languages ?? 0, !homeFetchDone)} languages.
+              </p>
               <div className="hp-foot-stay">
                 <input placeholder="Your email — get monthly updates" />
                 <button>Subscribe</button>

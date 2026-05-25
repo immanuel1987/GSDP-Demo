@@ -4,7 +4,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from databricks import sql
 from dotenv import load_dotenv
@@ -21,6 +21,10 @@ ONTOLOGY_MAPPED_VALUE_DEDUP_TABLE = "ontology.silver.ontology_mapped_value_dedup
 SALESIANONLINE_FINAL_TABLE = os.getenv(
     "DATABRICKS_SALESIANONLINE_FINAL_TABLE",
     "salesianonline.silver.final",
+)
+VECTOR_DB_INPUT_TABLE = os.getenv(
+    "DATABRICKS_VECTOR_DB_INPUT_TABLE",
+    "gsdp.gold.vector_db_input",
 )
 
 # Cached (name, dtype lower) rows from DESCRIBE — refreshed on process restart only.
@@ -216,6 +220,53 @@ SALESIANONLINE_FINAL_SEARCH_COLUMNS = [
     "extracted_url",
     "extracted_keywords",
     "extracted_publisher",
+]
+
+# gsdp.gold.vector_db_input — RAG / vector index source rows.
+VECTOR_DB_INPUT_COLUMNS = [
+    "subject",
+    "document_id",
+    "title",
+    "abstract",
+    "bibliographical_citation",
+    "contributor",
+    "country",
+    "inferred_continent",
+    "language",
+    "knowledge_area",
+    "work_type",
+    "content_classification",
+    "salesian_family_group",
+    "file_name",
+    "old_link",
+    "url",
+    "mark_biographic",
+    "publication_year",
+    "period_of_reference",
+    "reference_start_year",
+    "reference_end_year",
+    "all_predicates_json",
+    "vector_search_text",
+    "vector_id",
+    "created_at",
+]
+
+VECTOR_DB_INPUT_SEARCH_COLUMNS = [
+    "subject",
+    "document_id",
+    "title",
+    "abstract",
+    "bibliographical_citation",
+    "contributor",
+    "country",
+    "language",
+    "knowledge_area",
+    "work_type",
+    "content_classification",
+    "salesian_family_group",
+    "file_name",
+    "vector_search_text",
+    "vector_id",
 ]
 
 RESOURCE_EXCEL_COLUMNS = [
@@ -561,6 +612,291 @@ def query_salesianonline_final_table(limit: int = 100, offset: int = 0, search: 
             columns = [column[0] for column in cursor.description]
             data = [_row_to_dict(columns, row) for row in rows]
             return {"data": data, "total": total}
+    finally:
+        connection.close()
+
+
+def _vector_db_filter_clauses(filters: Optional[Dict[str, Any]]) -> Tuple[List[str], List[Any]]:
+    """Build AND clauses for vector_db_input column filters (values are LIKE unless year)."""
+    if not filters:
+        return [], []
+
+    clauses: List[str] = []
+    params: List[Any] = []
+
+    def eq_col(col: str, val: str) -> None:
+        clauses.append(
+            f"lower(trim(coalesce(cast({_quote_sql_ident(col)} as string), ''))) = lower(trim(?))"
+        )
+        params.append(val.strip())
+
+    for key, col in (
+        ("knowledge_area", "knowledge_area"),
+        ("work_type", "work_type"),
+        ("language", "language"),
+        ("country", "country"),
+        ("salesian_family_group", "salesian_family_group"),
+        ("contributor", "contributor"),
+    ):
+        val = (filters.get(key) or "").strip()
+        if val:
+            eq_col(col, val)
+
+    region = (filters.get("region") or "").strip()
+    if region:
+        clauses.append(
+            f"(lower(trim(coalesce(cast({_quote_sql_ident('inferred_continent')} as string), ''))) = lower(trim(?)) "
+            f"OR lower(trim(coalesce(cast({_quote_sql_ident('country')} as string), ''))) = lower(trim(?)))"
+        )
+        params.extend([region, region])
+
+    ref_year = filters.get("reference_year")
+    if ref_year is not None and str(ref_year).strip() != "":
+        try:
+            y = int(str(ref_year).strip())
+            rs = _quote_sql_ident("reference_start_year")
+            re = _quote_sql_ident("reference_end_year")
+            clauses.append(
+                "("
+                f"({rs} IS NOT NULL OR {re} IS NOT NULL) AND "
+                f"? BETWEEN "
+                f"COALESCE(cast({rs} as int), cast({re} as int)) AND "
+                f"COALESCE(cast({re} as int), cast({rs} as int))"
+                ")"
+            )
+            params.append(y)
+        except ValueError:
+            pass
+
+    pub_year = filters.get("publication_year")
+    if pub_year is not None and str(pub_year).strip() != "":
+        try:
+            y = int(str(pub_year).strip())
+            clauses.append(f"cast({_quote_sql_ident('publication_year')} as int) = ?")
+            params.append(y)
+        except ValueError:
+            pass
+
+    doc_media = (filters.get("doc_media") or "").strip().lower()
+    if doc_media == "pdf":
+        clauses.append(
+            "("
+            f"lower(coalesce(cast({_quote_sql_ident('work_type')} as string), '')) like '%pdf%' "
+            f"OR lower(coalesce(cast({_quote_sql_ident('file_name')} as string), '')) like '%.pdf%' "
+            f"OR lower(coalesce(cast({_quote_sql_ident('url')} as string), '')) like '%.pdf%'"
+            ")"
+        )
+    elif doc_media == "image":
+        clauses.append(
+            "("
+            f"lower(coalesce(cast({_quote_sql_ident('work_type')} as string), '')) like '%image%' "
+            f"OR lower(coalesce(cast({_quote_sql_ident('file_name')} as string), '')) like '%.png%' "
+            f"OR lower(coalesce(cast({_quote_sql_ident('file_name')} as string), '')) like '%.jpg%' "
+            f"OR lower(coalesce(cast({_quote_sql_ident('file_name')} as string), '')) like '%.jpeg%' "
+            f"OR lower(coalesce(cast({_quote_sql_ident('url')} as string), '')) like '%.png%' "
+            f"OR lower(coalesce(cast({_quote_sql_ident('url')} as string), '')) like '%.jpg%'"
+            ")"
+        )
+
+    return clauses, params
+
+
+def query_vector_db_input_table(
+    limit: int = 100,
+    offset: int = 0,
+    search: Optional[str] = None,
+    filters: Optional[Dict[str, Any]] = None,
+):
+    """
+    Paginated rows from gsdp.gold.vector_db_input (override via DATABRICKS_VECTOR_DB_INPUT_TABLE).
+    """
+    limit = max(1, min(int(limit), 500))
+    offset = max(0, int(offset))
+    cols_sql = ", ".join(_quote_sql_ident(c) for c in VECTOR_DB_INPUT_COLUMNS)
+    base_from = f"FROM {_fq_table_sql(VECTOR_DB_INPUT_TABLE)}"
+    order_by = "created_at DESC NULLS LAST, document_id DESC NULLS LAST"
+
+    connection = get_databricks_connection()
+    try:
+        with connection.cursor() as cursor:
+            q_clean = _sanitize_search(search) if search else ""
+            filter_clauses, filter_params = _vector_db_filter_clauses(filters)
+
+            where_parts: List[str] = []
+            params: List[Any] = []
+
+            if q_clean:
+                pat = f"%{q_clean}%"
+                or_parts = [
+                    f"lower(coalesce(cast({_quote_sql_ident(c)} as string), '')) like lower(?)"
+                    for c in VECTOR_DB_INPUT_SEARCH_COLUMNS
+                ]
+                where_parts.append("(" + " OR ".join(or_parts) + ")")
+                params.extend([pat] * len(VECTOR_DB_INPUT_SEARCH_COLUMNS))
+
+            if filter_clauses:
+                where_parts.extend(filter_clauses)
+                params.extend(filter_params)
+
+            where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+
+            count_sql = f"SELECT COUNT(*) AS c {base_from} {where_sql}"
+            cursor.execute(count_sql, tuple(params) if params else None)
+            total = int(cursor.fetchone()[0])
+
+            data_sql = (
+                f"SELECT {cols_sql} {base_from} {where_sql} "
+                f"ORDER BY {order_by} "
+                f"LIMIT {limit} OFFSET {offset}"
+            )
+            cursor.execute(data_sql, tuple(params) if params else None)
+
+            rows = cursor.fetchall()
+            columns = [column[0] for column in cursor.description]
+            data = [_row_to_dict(columns, row) for row in rows]
+            return {"data": data, "total": total}
+    finally:
+        connection.close()
+
+
+def query_vector_db_input_facets() -> Dict[str, List[str]]:
+    """Distinct facet values for Resource Library filter dropdowns."""
+    table = _fq_table_sql(VECTOR_DB_INPUT_TABLE)
+    spec = [
+        ("knowledge_area", "themes", "string"),
+        ("work_type", "types", "string"),
+        ("language", "languages", "string"),
+        ("country", "countries", "string"),
+        ("inferred_continent", "continents", "string"),
+        ("salesian_family_group", "groups", "string"),
+        ("contributor", "contributors", "string"),
+        ("content_classification", "classifications", "string"),
+    ]
+    out: Dict[str, List[str]] = {key: [] for _, key, _ in spec}
+    out["years"] = []
+    out["publication_years"] = []
+
+    connection = get_databricks_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                WITH ref_years AS (
+                    SELECT cast({_quote_sql_ident('reference_start_year')} AS int) AS y
+                    FROM {table}
+                    WHERE {_quote_sql_ident('reference_start_year')} IS NOT NULL
+                    UNION
+                    SELECT cast({_quote_sql_ident('reference_end_year')} AS int) AS y
+                    FROM {table}
+                    WHERE {_quote_sql_ident('reference_end_year')} IS NOT NULL
+                )
+                SELECT cast(y AS string) AS v
+                FROM ref_years
+                WHERE y IS NOT NULL
+                GROUP BY y
+                ORDER BY y DESC
+                LIMIT 60
+                """
+            )
+            out["years"] = [
+                str(row[0]).strip()
+                for row in cursor.fetchall()
+                if row and row[0] is not None and str(row[0]).strip()
+            ]
+
+            cursor.execute(
+                f"""
+                SELECT cast({_quote_sql_ident('publication_year')} AS string) AS v
+                FROM {table}
+                WHERE {_quote_sql_ident('publication_year')} IS NOT NULL
+                GROUP BY {_quote_sql_ident('publication_year')}
+                ORDER BY cast({_quote_sql_ident('publication_year')} AS int) DESC
+                LIMIT 60
+                """
+            )
+            out["publication_years"] = [
+                str(row[0]).strip()
+                for row in cursor.fetchall()
+                if row and row[0] is not None and str(row[0]).strip()
+            ]
+
+            for col, key, kind in spec:
+                if kind == "int":
+                    sql = f"""
+                    SELECT cast({_quote_sql_ident(col)} as string) AS v, COUNT(*) AS c
+                    FROM {table}
+                    WHERE {_quote_sql_ident(col)} IS NOT NULL
+                    GROUP BY cast({_quote_sql_ident(col)} as string)
+                    ORDER BY c DESC
+                    LIMIT 40
+                    """
+                else:
+                    sql = f"""
+                    SELECT cast({_quote_sql_ident(col)} as string) AS v, COUNT(*) AS c
+                    FROM {table}
+                    WHERE {_quote_sql_ident(col)} IS NOT NULL
+                      AND trim(cast({_quote_sql_ident(col)} as string)) != ''
+                    GROUP BY cast({_quote_sql_ident(col)} as string)
+                    ORDER BY c DESC
+                    LIMIT 40
+                    """
+                cursor.execute(sql)
+                values = []
+                for row in cursor.fetchall():
+                    if not row or row[0] is None:
+                        continue
+                    v = str(row[0]).strip()
+                    if v and v.lower() not in ("null", "none", "n/a", "na"):
+                        values.append(v)
+                if key == "years":
+                    values.sort(reverse=True)
+                else:
+                    values.sort(key=lambda s: s.lower())
+                out[key] = values
+    finally:
+        connection.close()
+
+    return out
+
+
+def query_vector_db_input_summary() -> Dict[str, Any]:
+    """Aggregate counts for dashboard KPIs (full table, not facet sample)."""
+    table = _fq_table_sql(VECTOR_DB_INPUT_TABLE)
+    sql = f"""
+    SELECT
+        COUNT(*) AS total_rows,
+        MAX(created_at) AS last_ingestion,
+        COUNT(DISTINCT CASE
+            WHEN {_quote_sql_ident('country')} IS NOT NULL
+             AND trim(cast({_quote_sql_ident('country')} AS string)) != ''
+             AND lower(trim(cast({_quote_sql_ident('country')} AS string))) NOT IN ('null', 'none', 'n/a', 'na')
+            THEN lower(trim(cast({_quote_sql_ident('country')} AS string)))
+        END) AS distinct_countries,
+        COUNT(DISTINCT CASE
+            WHEN {_quote_sql_ident('knowledge_area')} IS NOT NULL
+             AND trim(cast({_quote_sql_ident('knowledge_area')} AS string)) != ''
+            THEN lower(trim(cast({_quote_sql_ident('knowledge_area')} AS string)))
+        END) AS distinct_knowledge_areas,
+        COUNT(DISTINCT CASE
+            WHEN {_quote_sql_ident('work_type')} IS NOT NULL
+             AND trim(cast({_quote_sql_ident('work_type')} AS string)) != ''
+            THEN lower(trim(cast({_quote_sql_ident('work_type')} AS string)))
+        END) AS distinct_work_types,
+        COUNT(DISTINCT CASE
+            WHEN {_quote_sql_ident('language')} IS NOT NULL
+             AND trim(cast({_quote_sql_ident('language')} AS string)) != ''
+            THEN lower(trim(cast({_quote_sql_ident('language')} AS string)))
+        END) AS distinct_languages
+    FROM {table}
+    """
+    connection = get_databricks_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            row = cursor.fetchone()
+            cols = [c[0] for c in cursor.description]
+            raw = dict(zip(cols, row))
+            return {k: _serialize_value(v) for k, v in raw.items()}
     finally:
         connection.close()
 
