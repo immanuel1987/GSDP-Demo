@@ -231,9 +231,15 @@ STOP_WORDS = {
     "out", "regarding"
 }
 
-# Intent words - describe what the user wants, not what they're searching for
+# Intent words - describe what the user wants or which field to search,
+# not the actual content to match against. These are filtered out when
+# other meaningful content keywords exist in the query.
 INTENT_WORDS = {
+    # Temporal qualifiers
     "year", "publication", "date", "published", "period", "time",
+    # Field qualifiers (describe metadata fields, not content)
+    "author", "writer", "contributor", "name", "written",
+    # Query intent
     "methodology", "explain", "describe", "relationship", "overview",
     "summary", "detail", "details", "meaning", "definition"
 }
@@ -320,10 +326,13 @@ def extract_keywords(query):
     words = re.findall(r'[a-zA-Z0-9]+', query_without_ranges.lower())
     keywords = [w for w in words if w not in STOP_WORDS and len(w) > 2]
 
-    # If query contains a 4-digit year, filter out intent words
-    years = [w for w in keywords if w.isdigit() and len(w) == 4]
-    if years:
-        keywords = [w for w in keywords if w not in INTENT_WORDS]
+    # Filter out intent/context words when other content keywords exist.
+    # Intent words describe the user's goal or which field to search
+    # (e.g., "author", "year", "explain"), not the content to match.
+    # If ALL keywords are intent words, keep them (user may be searching for that term).
+    content_keywords = [w for w in keywords if w not in INTENT_WORDS]
+    if content_keywords:
+        keywords = content_keywords
 
     return keywords
 
@@ -900,34 +909,38 @@ Provide a comprehensive answer based on the document content."""
 
 
 def format_sources(docs):
-    """Format source documents with icons and clickable View Document URLs."""
+    """Format source documents with clear visual hierarchy, no icons."""
     if not docs or (isinstance(docs[0], dict) and "error" in docs[0]):
         return "No sources retrieved."
-    sources_md = f"**\U0001F4DA {len(docs)} Matched Document(s):**\n\n"
+    sources_md = f"**{len(docs)} Matched Document(s):**\n\n---\n\n"
     for i, doc in enumerate(docs, 1):
         work_type = doc.get("work_type") or ""
         language = doc.get("language") or ""
-        icon = MEDIA_ICONS.get(work_type.lower(), "\U0001F4C4")
-        flag = LANGUAGE_FLAGS.get(language, LANGUAGE_FLAGS["UNKNOWN"])
-        classification = doc.get("content_classification") or "N/A"
         title_display = doc.get("title") or doc.get("file_name") or "Unknown"
         score = doc.get("score", 0)
-        sources_md += (
-            f"**{i}. {icon} {title_display}** (relevance: {score:.0%})\n"
-            f"   {flag} {language or 'N/A'} \u2022 "
-            f"\U0001F4D6 {work_type or 'N/A'} \u2022 "
-            f"\U0001F3F7\uFE0F {classification}\n"
-        )
-        if doc.get("knowledge_area"):
-            sources_md += f"   \U0001F4D8 {doc['knowledge_area']}\n"
-        if doc.get("contributor"):
-            sources_md += f"   \U0001F464 {clean_contributor(doc['contributor']).title()}\n"
-        if doc.get("country"):
-            sources_md += f"   \U0001F30D {doc['country']}\n"
-        sources_md += f"   \U0001F517 [\U0001F4C2 View Document]({doc['url']})\n"
-        sources_md += "\n"
-    return sources_md
 
+        # Title line
+        sources_md += f"**{i}. {title_display}**\n\n"
+
+        # Metadata block
+        sources_md += f"\u2022 Relevance: `{score:.0%}`\n\n"
+        sources_md += f"\u2022 Language: {language or 'N/A'}\n\n"
+        sources_md += f"\u2022 Type: {work_type or 'N/A'}\n\n"
+        if doc.get("knowledge_area"):
+            sources_md += f"\u2022 Area: {doc['knowledge_area']}\n\n"
+        if doc.get("contributor"):
+            sources_md += f"\u2022 Author: {clean_contributor(doc['contributor']).title()}\n\n"
+        if doc.get("country"):
+            sources_md += f"\u2022 Country: {doc['country']}\n\n"
+
+        # View Document link
+        sources_md += f"[View Document]({doc['url']})\n\n"
+
+        # Separator between documents
+        if i < len(docs):
+            sources_md += "---\n\n"
+
+    return sources_md
 
 def chat(message, media_filter):
     """Main RAG pipeline: two-tier retrieval + LLM generation.
@@ -1403,6 +1416,153 @@ html, body {
     line-height: 1.45;
 }
 
+/* Loading overlay — shown automatically by Gradio while processing */
+@keyframes gsdp-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
+@keyframes gsdp-spin {
+    to { transform: rotate(360deg); }
+}
+.answer-panel-card.generating,
+.sources-panel-card.generating {
+    position: relative !important;
+}
+.answer-panel-card.generating::after,
+.sources-panel-card.generating::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(2px);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.answer-panel-card.generating::before,
+.sources-panel-card.generating::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 101;
+    width: 36px;
+    height: 36px;
+    border: 3.5px solid var(--border-2);
+    border-top-color: var(--blue-600);
+    border-radius: 50%;
+    animation: gsdp-spin 0.7s linear infinite;
+}
+/* Hide Gradio's default progress bar */
+.answer-panel-card .progress-bar,
+.sources-panel-card .progress-bar,
+.answer-panel-card .meta-text,
+.sources-panel-card .meta-text {
+    display: none !important;
+}
+
+/* Loading overlay — shown automatically by Gradio while processing */
+@keyframes gsdp-spin {
+    to { transform: rotate(360deg); }
+}
+.answer-panel-card.generating,
+.sources-panel-card.generating {
+    position: relative !important;
+}
+.answer-panel-card.generating::after,
+.sources-panel-card.generating::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(2px);
+    border-radius: var(--radius-md);
+}
+.answer-panel-card.generating::before,
+.sources-panel-card.generating::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 101;
+    width: 36px;
+    height: 36px;
+    border: 3.5px solid var(--border-2);
+    border-top-color: var(--blue-600);
+    border-radius: 50%;
+    animation: gsdp-spin 0.7s linear infinite;
+}
+.answer-panel-card .progress-bar,
+.sources-panel-card .progress-bar,
+.answer-panel-card .meta-text,
+.sources-panel-card .meta-text {
+    display: none !important;
+}
+
+
+/* Full-page loading overlay */
+.fullpage-loader {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(8, 47, 77, 0.82) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+}
+.fullpage-loader .loader-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+.fullpage-loader .loader-spinner {
+    width: 56px;
+    height: 56px;
+    border: 4.5px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #4da6ff;
+    border-radius: 50%;
+    animation: gsdp-fullpage-spin 0.8s linear infinite;
+}
+.fullpage-loader .loader-text {
+    color: #fff;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-align: center;
+}
+.fullpage-loader .loader-subtext {
+    color: rgba(210, 230, 255, 0.75);
+    font-size: 0.88rem;
+    font-weight: 400;
+    margin-top: -0.8rem;
+    text-align: center;
+}
+@keyframes gsdp-fullpage-spin {
+    to { transform: rotate(360deg); }
+}
+/* Ensure the overlay HTML block has no padding/margin from Gradio */
+.fullpage-loader-wrapper {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 99999 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
 @media (max-width: 900px) {
     .content-row { flex-direction: column !important; }
     .toolbar-row { flex-direction: column !important; align-items: stretch !important; }
@@ -1472,7 +1632,7 @@ def create_app():
                     "\U0001F50D Ask anything \u2014 e.g., What is the Preventive "
                     "System methodology?"
                 ),
-                lines=2,
+                lines=1,
                 max_lines=4,
             )
             with gr.Row(elem_classes="search-actions"):
@@ -1539,15 +1699,42 @@ def create_app():
             "Corpus</div></footer>"
         )
 
+        # Full-page loading overlay (hidden by default)
+        loading_overlay = gr.HTML(
+            value=(
+                '<div class="fullpage-loader">'
+                '<div class="loader-content">'
+                '<div class="loader-spinner"></div>'
+                '<div class="loader-text">Searching the Knowledge Base...</div>'
+                '<div class="loader-subtext">Please wait while we find relevant documents and generate your answer.</div>'
+                '</div></div>'
+            ),
+            visible=False,
+            elem_classes="fullpage-loader-wrapper",
+        )
+
+        # Event handlers: show full-page loader → run search → hide loader
         submit_btn.click(
+            fn=lambda: gr.update(visible=True),
+            outputs=[loading_overlay],
+        ).then(
             fn=chat,
             inputs=[query_input, media_filter],
             outputs=[answer_output, sources_output],
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[loading_overlay],
         )
         query_input.submit(
+            fn=lambda: gr.update(visible=True),
+            outputs=[loading_overlay],
+        ).then(
             fn=chat,
             inputs=[query_input, media_filter],
             outputs=[answer_output, sources_output],
+        ).then(
+            fn=lambda: gr.update(visible=False),
+            outputs=[loading_overlay],
         )
         lang_radio.change(
             fn=switch_language,
@@ -1565,7 +1752,7 @@ def create_app():
 
 def mount_rag_ui(fastapi_app: FastAPI, path: str = "/rag") -> None:
     """Mount the Gradio RAG UI on the main FastAPI application."""
-    gr.mount_gradio_app(fastapi_app, create_app(), path=path, show_api=False)
+    gr.mount_gradio_app(fastapi_app, create_app(), path=path)
 
 
 
