@@ -605,7 +605,7 @@ export function PublicHomePage() {
               <span className="hp-kbd">⌘K</span>
             </div>
             <div className="hp-nav-cta">
-              <button className="hp-btn" onClick={() => navigate('/login')}>Sign in</button>
+              <button className="hp-btn" onClick={() => navigate('/login')}>Login</button>
               <button className="hp-btn hp-btn-primary" onClick={() => navigate('/login')}>Enter Platform</button>
             </div>
           </div>
@@ -831,10 +831,22 @@ export function PublicHomePage() {
                 Explore map →
               </button>
             </div>
-            <button type="button" className="hp-map-mini hp-map-mini--clickable" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')} aria-label="Explore map — sign in to open the full map">
-              <img src="/assets/south_asia_map.png" alt="South Asia Pilot Map" className="hp-map-real" />
-              <div className="hp-map-overlay">
-                <div className="hp-map-overlay-text">Live Satellite Overview · sign in for interactive map</div>
+            <button type="button" className="hp-map-mini hp-map-mini--clickable" onClick={() => navigateLoginNext(navigate, '/dashboard/institutions')} aria-label="Explore map — login to open the full interactive map">
+              <div className="hp-map-canvas">
+                <img
+                  src="/assets/world_map.jpg"
+                  alt="World map — global Salesian presence"
+                  className="hp-map-real"
+                  width={960}
+                  height={480}
+                  loading="lazy"
+                />
+                <div className="hp-map-markers" aria-hidden>
+                  <span className="hp-map-pin hp-map-pin--hq" title="HQ" />
+                  <span className="hp-map-pin hp-map-pin--pilot" title="South Asia pilot" />
+                  <span className="hp-map-pin hp-map-pin--active" title="Active" />
+                  <span className="hp-map-pin hp-map-pin--mission" title="Mission" />
+                </div>
               </div>
             </button>
             <div className="hp-map-foot">
@@ -978,7 +990,7 @@ export function PublicHomePage() {
           </div>
           <div className="l">
             <a>Privacy</a><a>Terms</a><a>Accessibility</a>
-            <a onClick={() => navigate('/login')}>Sign in</a>
+            <a onClick={() => navigate('/login')}>Login</a>
           </div>
         </div>
 

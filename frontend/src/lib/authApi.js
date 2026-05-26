@@ -96,7 +96,7 @@ export async function apiLogin(login, password) {
     body: JSON.stringify({ login: login.trim(), password }),
   })
   if (!res.ok) {
-    let detail = 'Sign in failed'
+    let detail = 'Login failed'
     try {
       const j = await res.json()
       if (j.detail != null) detail = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)

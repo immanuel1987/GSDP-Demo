@@ -252,7 +252,7 @@ export function DashboardLayout() {
             onClick={signOut}
             className="flex w-full cursor-pointer items-center gap-2 border-none bg-transparent py-2 text-left text-sm text-white/30 transition-colors hover:text-white/70 lg:py-1.5 lg:text-xs"
           >
-            ← Sign Out
+            ← Log out
           </button>
         </div>
       </aside>

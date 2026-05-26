@@ -127,7 +127,7 @@ export function Footer({ onFooterAction }) {
             to="/login"
             className="flex flex-col gap-px rounded-md px-2 py-1.5 text-left no-underline transition-colors hover:bg-white/[0.07]"
           >
-            <span className="text-[13px] font-medium text-peach-accent">Sign in to the platform →</span>
+            <span className="text-[13px] font-medium text-peach-accent">Login to the platform →</span>
             <span className="text-[11px] text-white/40">Global Salesian Digital Platform</span>
           </Link>
         </div>
@@ -181,7 +181,7 @@ export function Footer({ onFooterAction }) {
             to="/login"
             className="cursor-pointer text-xs text-white/40 no-underline transition-colors hover:text-white/75"
           >
-            Sign In
+            Login
           </Link>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { buildSessionFromLoginResponse, getPostLoginTarget } from '../auth/loginSession'
 import { getSession, setSession } from '../auth/session'
 import { apiLogin } from '../lib/authApi'
+import { SdbGlobeLogo } from '../components/branding/SdbGlobeLogo'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -39,7 +40,7 @@ export function LoginPage() {
       const target = getPostLoginTarget(location.state, sessionPayload.role)
       navigate(target.path, { replace: true, ...(target.state ? { state: target.state } : {}) })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign in failed.')
+      setError(err instanceof Error ? err.message : 'Login failed.')
       setInfo('')
     } finally {
       setSubmitting(false)
@@ -61,26 +62,26 @@ export function LoginPage() {
       </div>
 
       <div className="relative z-[1] mx-5 w-full max-w-[440px]">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 inline-flex size-16 items-center justify-center rounded-full bg-sdb-orange text-[28px] text-white shadow-[0_0_0_8px_rgba(230,126,34,0.2),0_8px_32px_rgba(0,0,0,0.3)]">
-            ✝
+        <div className="mb-8 flex flex-col items-center gap-3">
+          <div className="flex items-center gap-3">
+            <SdbGlobeLogo size={40} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+            <div className="rounded-lg border border-white/15 bg-white/[0.08] px-4 py-2.5 text-left">
+              <span className="block font-serif text-xl font-bold leading-tight text-white">Global Salesian</span>
+              <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/50">
+                Digital Platform
+              </span>
+            </div>
           </div>
-          <div className="mx-auto mb-1 inline-flex flex-col rounded-lg border border-white/15 bg-white/[0.08] px-4 py-2.5">
-            <span className="font-serif text-xl font-bold leading-tight text-white">Global Salesian</span>
-            <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50">
-              Digital Platform
-            </span>
-          </div>
-          <div className="text-[13px] text-white/55">
-            Salesian Congregation · South Asia coordination
-          </div>
+          <p className="text-center text-[13px] text-white/55">
+            Salesian Congregation · South Asia Coordination
+          </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
           className="rounded-2xl border border-white/14 bg-white/[0.07] p-8 shadow-[0_24px_64px_rgba(0,0,0,0.35)] backdrop-blur-md"
         >
-          <div className="mb-1 font-serif text-lg font-bold text-white">Sign in</div>
+          <div className="mb-1 font-serif text-lg font-bold text-white">Login</div>
           <p className="mb-6 text-[13px] text-white/55">Access the Salesian knowledge platform</p>
 
 
@@ -172,7 +173,7 @@ export function LoginPage() {
             disabled={submitting}
             className="mb-3 w-full cursor-pointer rounded-lg border-none bg-sdb-orange py-3.5 font-sans text-[15px] font-bold tracking-wide text-white transition-[filter] hover:brightness-110 disabled:opacity-70"
           >
-            {submitting ? 'Signing in…' : 'Sign In →'}
+            {submitting ? 'Logging in…' : 'Login →'}
           </button>
 
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -198,7 +199,7 @@ export function LoginPage() {
         <p className="mt-5 text-center text-xs leading-relaxed text-white/30">
           Access restricted to Salesian Family members and authorised partners.
           <br />
-          Open access resources available without sign-in on the public homepage.
+          Open access resources available without logging in on the public homepage.
         </p>
       </div>
     </div>

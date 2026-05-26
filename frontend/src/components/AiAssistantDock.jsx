@@ -50,10 +50,10 @@ export function AiAssistantDock({ variant = 'app' } = {}) {
 
   const subtitle =
     variant === 'public'
-      ? 'Draft a question here, then sign in to run it in the full AI Assistant.'
+      ? 'Draft a question here, then login to run it in the full AI Assistant.'
       : 'Quick prompts — opens the full AI Assistant workspace.'
 
-  const primaryLabel = variant === 'public' ? 'Sign in →' : 'Open AI Assistant →'
+  const primaryLabel = variant === 'public' ? 'Login →' : 'Open AI Assistant →'
 
   const dock = (
     <div className={`hp-ai-dock hp-ai-dock--${variant}${open ? ' is-open' : ''}`}>

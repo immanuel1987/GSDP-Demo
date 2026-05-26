@@ -61,7 +61,7 @@ const slides = [
     ),
     sub: 'From Guwahati to Colombo, from Mumbai to Kathmandu — Salesians walk beside the poorest youth every day. Explore the mission, the methods, and the people behind it.',
     primary: { label: 'Explore Collections', scroll: 'coll-pub' },
-    secondary: { label: 'Sign in for full access', action: 'signin' },
+    secondary: { label: 'Login for full access', action: 'signin' },
   },
 ]
 

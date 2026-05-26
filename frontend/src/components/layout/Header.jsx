@@ -341,7 +341,7 @@ export function Header() {
             to="/login"
             className="cursor-pointer rounded-lg border border-sdb-blue bg-transparent px-4 py-2.5 text-center font-sans text-sm font-semibold text-sdb-blue no-underline transition-colors hover:bg-sdb-blue-pale sm:py-2 sm:text-[13px]"
           >
-            Sign In
+            Login
           </Link>
           <Link
             to="/login"

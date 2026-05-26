@@ -1462,6 +1462,85 @@ button.hp-panel-all {
   outline-offset: 2px;
 }
 
+.hp-map-canvas {
+  position: relative;
+  width: 100%;
+  min-height: 220px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.hp-map-real {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 220px;
+  max-height: 280px;
+  object-fit: cover;
+  object-position: center center;
+  filter: saturate(1.05) contrast(1.02);
+}
+
+.hp-map-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hp-map-pin {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25), 0 0 12px currentColor;
+  animation: hp-map-pulse 2.4s ease-in-out infinite;
+}
+
+.hp-map-pin--hq {
+  left: 51%;
+  top: 38%;
+  background: #e67e22;
+  color: #e67e22;
+}
+
+.hp-map-pin--pilot {
+  left: 72%;
+  top: 52%;
+  background: #1f6eb8;
+  color: #1f6eb8;
+  animation-delay: 0.4s;
+}
+
+.hp-map-pin--active {
+  left: 68%;
+  top: 46%;
+  background: #1a8a6e;
+  color: #1a8a6e;
+  animation-delay: 0.8s;
+}
+
+.hp-map-pin--mission {
+  left: 78%;
+  top: 58%;
+  background: #c9a227;
+  color: #c9a227;
+  animation-delay: 1.2s;
+}
+
+@keyframes hp-map-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.88;
+  }
+}
+
 .hp-map-mini svg,
 .hp-map-svg {
   width: 100%;

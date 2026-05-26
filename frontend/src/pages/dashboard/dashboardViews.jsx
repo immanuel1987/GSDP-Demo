@@ -3666,7 +3666,7 @@ export function AccessView() {
     <main id="page-access" className="relative min-h-0 flex-1 overflow-y-auto bg-off-white p-6">
       <SectionHeader
         title="Access Control"
-        subtitle="Changes are saved on the server and apply the next time users with that role sign in."
+        subtitle="Changes are saved on the server and apply the next time users with that role log in."
       />
       <div className="rounded-xl border border-border-sdb bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-sdb px-4 py-2.5">
@@ -3687,7 +3687,7 @@ export function AccessView() {
             Each <strong className="text-ink">checked</strong> box is stored on the role row and enforced at{' '}
             <strong className="text-ink">login</strong> via <code className="rounded bg-off-white px-1 text-[11px] text-ink">allowed_pages</code>.
             Dashboard must include <strong className="text-ink">Dashboard</strong> (added automatically if missing). Users
-            must sign in again to pick up permission changes.
+            must log in again to pick up permission changes.
           </p>
           {saveError ? (
             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-900">
