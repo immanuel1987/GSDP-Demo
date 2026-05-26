@@ -2,12 +2,12 @@ import { ANALYTICS_PROVINCE_DATA } from '../data/analyticsProvinceData'
 import { isBlockedHomeImage, isUsableDynamicSlideImage } from '../data/homeStaticImages'
 
 /** Base URL for backend (e.g. `VITE_API_BASE_URL` in `.env.development`). */
-// export function apiBase() {
-//   const raw = import.meta.env.VITE_API_BASE_URL
-//   const s = raw === undefined || raw === null ? '' : String(raw).trim()
-//   if (s) return s.replace(/\/$/, '')
-//   return 'http://127.0.0.1:2005'
-// }
+export function apiBase() {
+  const raw = import.meta.env.VITE_API_BASE_URL
+  const s = raw === undefined || raw === null ? '' : String(raw).trim()
+  if (s) return s.replace(/\/$/, '')
+  return 'http://127.0.0.1:2005'
+}
 
 /** GSDP Semantic Search (Gradio) on the FastAPI backend. `__theme=light` avoids OS-dark Gradio skin. */
 export function ragAssistantUrl() {
@@ -21,12 +21,12 @@ export function ragAssistantUrl() {
   }
 }
 
-export function apiBase() {
-  const raw = import.meta.env.VITE_API_BASE_URL
-  const s = raw === undefined || raw === null ? '' : String(raw).trim()
-  if (s) return s.replace(/\/$/, '')
-  return 'https://gsdpapi.boscosofttech.com'
-}
+// export function apiBase() {
+//   const raw = import.meta.env.VITE_API_BASE_URL
+//   const s = raw === undefined || raw === null ? '' : String(raw).trim()
+//   if (s) return s.replace(/\/$/, '')
+//   return 'https://gsdpapi.boscosofttech.com'
+// }
 
 // export function apiBase() {
 //   const raw = import.meta.env.VITE_API_BASE_URL
@@ -1701,8 +1701,13 @@ export function buildDashboardInstitutionsFromOntologyRows(rows, { limit = 48 } 
       participants: 120 + (idx % 9000) * 2,
       name: res.title,
       type: typeLabel,
-      region: inferDashboardRegionFromText(`${row.province_region || ''} ${res.title}`) || 'South Asia',
+      region:
+        inferDashboardRegionFromText(`${row.province_region || ''} ${res.title}`) ||
+        inferDashboardRegionFromText(englishCountryLabelFromRow(row)) ||
+        '',
       country: englishCountryLabelFromRow(row),
+      locatedIn: coerceOntologyString(row.LocatedIn),
+      address: coerceOntologyString(row.address),
       status: 'Catalogued',
       group: 'SDB',
       province: prov,
