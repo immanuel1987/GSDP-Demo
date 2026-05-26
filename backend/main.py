@@ -31,6 +31,7 @@ app.add_middleware(
         "http://localhost:2005",
         "http://127.0.0.1:2005",
         "https://gsdp-dev.cristoerp.com",
+        "https://gsdp-dev.cristoerp.com/",
         "https://demo-global-galesian-digital-platform.imman.workers.dev",
         "https://globalsalesiandigitalplatform.jamesrubert.workers.dev",
         "https://gsdp-7474649503171619.aws.databricksapps.com"
