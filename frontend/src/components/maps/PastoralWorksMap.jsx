@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { englishCountryDisplayName } from '../../lib/ontologyApi'
@@ -21,16 +21,99 @@ const MAP_MIN_ZOOM = 3
 /** One world copy: no repeating Asia when panning horizontally. */
 const TILE_WRAP_OPTS = { noWrap: true, minZoom: MAP_MIN_ZOOM, maxZoom: 19 }
 
-/** Keep the map on a single South Asia frame (still allows pan/zoom inside). */
-const SOUTH_ASIA_PAN_LIMIT = L.latLngBounds(
-  [1.5, 61],
-  [38.5, 104],
-)
-/** Default “home” framing after reset (India, neighbours, Sri Lanka). */
-const SOUTH_ASIA_RESET_VIEW = L.latLngBounds(
-  [5.5, 66.5],
-  [34.5, 99.5],
-)
+/** Optional pan limit when every pin is in South Asia. */
+const SOUTH_ASIA_PAN_LIMIT = L.latLngBounds([1.5, 61], [38.5, 104])
+const SOUTH_ASIA_RESET_VIEW = L.latLngBounds([5.5, 66.5], [34.5, 99.5])
+const WORLD_PAN_LIMIT = L.latLngBounds([-58, -175], [72, 175])
+
+/** City-level pins (checked before province / country). */
+const CITY_COORDS = [
+  [/\brome\b|roma\b|valdocco\b/i, [41.9028, 12.4964]],
+  [/\bturin\b|torino\b/i, [45.0703, 7.6869]],
+  [/\bmilan\b|milano\b/i, [45.4642, 9.19]],
+  [/\bnew\s*delhi\b/i, [28.6139, 77.209]],
+  [/\bmumbai\b|bombay\b/i, [19.076, 72.8777]],
+  [/\bbangalore\b|bengaluru\b/i, [12.9716, 77.5946]],
+  [/\bchennai\b|madras\b/i, [13.0827, 80.2707]],
+  [/\bcolombo\b/i, [6.9271, 79.8612]],
+]
+
+/** Country centroids for catalog rows outside South Asia province codes. */
+const COUNTRY_COORDS = {
+  Italy: [41.9028, 12.4964],
+  'Vatican City': [41.9029, 12.4534],
+  France: [46.6034, 1.8883],
+  Spain: [40.4637, -3.7492],
+  Portugal: [39.3999, -8.2245],
+  Germany: [51.1657, 10.4515],
+  Poland: [51.9194, 19.1451],
+  Belgium: [50.5039, 4.4699],
+  Netherlands: [52.1326, 5.2913],
+  Switzerland: [46.8182, 8.2275],
+  Austria: [47.5162, 14.5501],
+  'United Kingdom': [54.0, -2.5],
+  Ireland: [53.4129, -8.2439],
+  Greece: [39.0742, 21.8243],
+  Romania: [45.9432, 24.9668],
+  Russia: [61.524, 105.3188],
+  Ukraine: [48.3794, 31.1656],
+  Turkey: [38.9637, 35.2433],
+  India: [22.9734, 78.6569],
+  'Sri Lanka': [7.8731, 80.7718],
+  Nepal: [28.3949, 84.124],
+  Bangladesh: [23.685, 90.3563],
+  Pakistan: [30.3753, 69.3451],
+  China: [35.8617, 104.1954],
+  Japan: [36.2048, 138.2529],
+  'South Korea': [35.9078, 127.7669],
+  Philippines: [12.8797, 121.774],
+  Indonesia: [-2.5489, 118.0149],
+  Thailand: [15.87, 100.9925],
+  Vietnam: [14.0583, 108.2772],
+  Malaysia: [4.2105, 101.9758],
+  Singapore: [1.3521, 103.8198],
+  Australia: [-25.2744, 133.7751],
+  'New Zealand': [-40.9006, 174.886],
+  Egypt: [26.8206, 30.8025],
+  Kenya: [-0.0236, 37.9062],
+  Nigeria: [9.082, 8.6753],
+  Ethiopia: [9.145, 40.4897],
+  'South Africa': [-30.5595, 22.9375],
+  Morocco: [31.7917, -7.0926],
+  Algeria: [28.0339, 1.6596],
+  Brazil: [-14.235, -51.9253],
+  Argentina: [-38.4161, -63.6167],
+  Chile: [-35.6751, -71.543],
+  Colombia: [4.5709, -74.2973],
+  Peru: [-9.19, -75.0152],
+  Mexico: [23.6345, -102.5528],
+  Canada: [56.1304, -106.3468],
+  'United States': [37.0902, -95.7129],
+  'Saudi Arabia': [23.8859, 45.0792],
+  'United Arab Emirates': [23.4241, 53.8478],
+}
+
+/** Country name hints in free text (title, address, region). */
+const COUNTRY_HINTS = [
+  [/\bitaly\b|italia\b|italiano\b/i, 'Italy'],
+  [/\bvatican\b/i, 'Vatican City'],
+  [/\bfrance\b|français\b/i, 'France'],
+  [/\bspain\b|españa\b/i, 'Spain'],
+  [/\bportugal\b/i, 'Portugal'],
+  [/\bgermany\b|deutschland\b/i, 'Germany'],
+  [/\bpoland\b|polska\b/i, 'Poland'],
+  [/\bunited\s*kingdom\b|\buk\b|england\b|britain\b/i, 'United Kingdom'],
+  [/\bireland\b/i, 'Ireland'],
+  [/\bindia\b|भारत\b/i, 'India'],
+  [/\bsri\s*lanka\b|ceylon\b/i, 'Sri Lanka'],
+  [/\bchina\b|中国\b/i, 'China'],
+  [/\bjapan\b|日本\b/i, 'Japan'],
+  [/\baustralia\b/i, 'Australia'],
+  [/\bbrazil\b|brasil\b/i, 'Brazil'],
+  [/\bmexico\b/i, 'Mexico'],
+  [/\bkenya\b/i, 'Kenya'],
+  [/\bnigeria\b/i, 'Nigeria'],
+]
 
 function addWorkingBasemap(map) {
   const esri = L.tileLayer(TILE_ESRI, {
@@ -129,18 +212,63 @@ function jitter([lat, lng], index, spread = 0.035) {
   return [lat + Math.cos(a) * r, lng + Math.sin(a) * r]
 }
 
+function institutionLocationBlob(inst) {
+  return [
+    inst.country,
+    inst.locatedIn,
+    inst.address,
+    inst.name,
+    inst.desc,
+    inst.region,
+    inst.province,
+    inst.url,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+const SOUTH_ASIA_COUNTRIES = new Set(['India', 'Sri Lanka', 'Nepal', 'Bangladesh', 'Pakistan', 'Bhutan', 'Myanmar'])
+
+function resolveCountryLabel(inst, blob) {
+  const fromField = englishCountryDisplayName(inst.country)
+  if (fromField) return fromField
+  for (const [re, countryName] of COUNTRY_HINTS) {
+    if (re.test(blob)) return countryName
+  }
+  if (/\beurope\b/i.test(String(inst.region || ''))) return 'Italy'
+  return ''
+}
+
 function coordsForInstitution(inst, index) {
-  const raw = String(inst.province || '').trim().toUpperCase()
-  const m = raw.match(/\b(IN[A-Z]{1,2}|LKC)\b/)
-  const code = m ? m[1] : raw.length <= 4 && /^IN[A-Z]+|LKC$/i.test(raw) ? raw : null
-  if (code && PROVINCE_COORDS[code]) {
+  const blob = institutionLocationBlob(inst)
+
+  for (const [re, coords] of CITY_COORDS) {
+    if (re.test(blob)) return jitter(coords, index, 0.04)
+  }
+
+  const countryLabel = resolveCountryLabel(inst, blob)
+  if (countryLabel && COUNTRY_COORDS[countryLabel]) {
+    return jitter(COUNTRY_COORDS[countryLabel], index, 0.12)
+  }
+
+  const code = extractProvinceCode(inst)
+  if (
+    code &&
+    PROVINCE_COORDS[code] &&
+    (!countryLabel || countryLabel === '—' || SOUTH_ASIA_COUNTRIES.has(countryLabel))
+  ) {
     return jitter(PROVINCE_COORDS[code], index)
   }
-  const c = String(inst.country || '').toLowerCase()
-  if (c.includes('sri lanka')) return jitter([7.8731, 80.7718], index)
-  if (c.includes('nepal')) return jitter([27.7172, 85.324], index)
-  if (c.includes('bangladesh')) return jitter([23.8103, 90.4125], index)
-  return jitter([22.5, 79.0], index)
+
+  return null
+}
+
+function latLngInSouthAsia(lat, lng) {
+  return lat >= 1.5 && lat <= 38.5 && lng >= 61 && lng <= 104
+}
+
+function allPinsInSouthAsia(latlngs) {
+  return latlngs.length > 0 && latlngs.every(([lat, lng]) => latLngInSouthAsia(lat, lng))
 }
 
 const TYPE_COLORS = {
@@ -180,13 +308,21 @@ export function PastoralWorksMap({
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const groupRef = useRef(null)
+  const resetBoundsRef = useRef(SOUTH_ASIA_RESET_VIEW)
+  const southAsiaOnlyRef = useRef(false)
+  const [resetLabel, setResetLabel] = useState('Fit all locations')
+  const [plottedCount, setPlottedCount] = useState(0)
 
-  /** Restore the standard single South Asia framing (after panning/zooming away). */
-  const resetSouthAsiaView = useCallback(() => {
+  const resetMapView = useCallback(() => {
     const map = mapRef.current
     if (!map) return
     map.closePopup()
-    map.flyToBounds(SOUTH_ASIA_RESET_VIEW, { padding: [28, 28], duration: 0.55, maxZoom: 6 })
+    const bounds = resetBoundsRef.current || SOUTH_ASIA_RESET_VIEW
+    map.flyToBounds(bounds, {
+      padding: [28, 28],
+      duration: 0.55,
+      maxZoom: southAsiaOnlyRef.current ? 6 : 10,
+    })
   }, [])
 
   useEffect(() => {
@@ -218,8 +354,8 @@ export function PastoralWorksMap({
         preferCanvas: false,
         minZoom: MAP_MIN_ZOOM,
         maxZoom: 19,
-        maxBounds: SOUTH_ASIA_PAN_LIMIT,
-        maxBoundsViscosity: 0.85,
+        maxBounds: WORLD_PAN_LIMIT,
+        maxBoundsViscosity: 0.65,
       })
       mapRef.current = map
       L.control
@@ -230,7 +366,7 @@ export function PastoralWorksMap({
         .addTo(map)
       addWorkingBasemap(map)
       groupRef.current = L.layerGroup().addTo(map)
-      map.setView([16.5, 78.5], 5)
+      map.setView([20, 10], 3)
       map.whenReady(() => {
         map.invalidateSize()
         window.requestAnimationFrame(() => map.invalidateSize())
@@ -245,7 +381,9 @@ export function PastoralWorksMap({
     const latlngs = []
 
     institutions.forEach((inst, i) => {
-      const [lat, lng] = coordsForInstitution(inst, i)
+      const coords = coordsForInstitution(inst, i)
+      if (!coords) return
+      const [lat, lng] = coords
       latlngs.push([lat, lng])
       const fill = colorForType(inst.type)
       const marker = L.circleMarker([lat, lng], {
@@ -286,13 +424,26 @@ export function PastoralWorksMap({
       marker.addTo(group)
     })
 
+    const southAsiaOnly = allPinsInSouthAsia(latlngs)
+    southAsiaOnlyRef.current = southAsiaOnly
+    map.setMaxBounds(southAsiaOnly ? SOUTH_ASIA_PAN_LIMIT : WORLD_PAN_LIMIT)
+
     if (latlngs.length === 1) {
-      map.setView(latlngs[0], Math.max(MAP_MIN_ZOOM, 7), { animate: false })
+      const zoom = southAsiaOnly ? 7 : 6
+      map.setView(latlngs[0], Math.max(MAP_MIN_ZOOM, zoom), { animate: false })
+      resetBoundsRef.current = L.latLngBounds(latlngs).pad(0.35)
     } else if (latlngs.length > 1) {
-      map.fitBounds(L.latLngBounds(latlngs).pad(0.18), { animate: false, maxZoom: 8 })
+      const bounds = L.latLngBounds(latlngs).pad(0.2)
+      map.fitBounds(bounds, { animate: false, maxZoom: southAsiaOnly ? 8 : 12 })
+      resetBoundsRef.current = bounds
     } else {
-      map.setView([16.5, 78.5], Math.max(MAP_MIN_ZOOM, 5), { animate: false })
+      map.setView([20, 10], Math.max(MAP_MIN_ZOOM, 3), { animate: false })
+      resetBoundsRef.current = WORLD_PAN_LIMIT
     }
+
+    setResetLabel(southAsiaOnly ? 'South Asia view' : 'Fit all locations')
+    setPlottedCount(latlngs.length)
+
     if (map.getZoom() < MAP_MIN_ZOOM) {
       map.setZoom(MAP_MIN_ZOOM, { animate: false })
     }
@@ -352,16 +503,16 @@ export function PastoralWorksMap({
       <div className="pointer-events-auto absolute top-2 right-2 z-[400]">
         <button
           type="button"
-          onClick={resetSouthAsiaView}
+          onClick={resetMapView}
           className="rounded-md border border-white/70 bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-sdb-blue-deep shadow-sm backdrop-blur-sm hover:bg-white"
-          title="Reset map to South Asia overview"
+          title="Reset map to show all plotted locations"
         >
-          South Asia view
+          {resetLabel}
         </button>
       </div>
       {showPinCount ? (
         <div className="pointer-events-none absolute bottom-2 left-2 z-[400] max-w-[min(100%,20rem)] rounded-md border border-white/60 bg-white/90 px-2 py-1 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm">
-          {institutions.length} pin{institutions.length !== 1 ? 's' : ''} · province centroids (approx.)
+          {plottedCount} of {institutions.length} plotted · country / province (approx.)
         </div>
       ) : null}
     </div>

@@ -1564,12 +1564,6 @@ export function InstitutionsView() {
         </table>
       </div>
       <div className="mt-4 overflow-hidden rounded-xl border border-border-sdb bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-sdb px-3 py-2.5">
-          <span className="text-sm font-semibold text-sdb-blue-deep">🗺 South Asia — live institution map</span>
-          <span className="rounded-full bg-sdb-blue-pale px-2.5 py-0.5 text-[10px] font-bold text-sdb-blue-deep">
-            {instLoading ? 'Loading…' : 'Hover or click pins · use South Asia view to reset the map'}
-          </span>
-        </div>
         <PastoralWorksMap institutions={filtered} loading={instLoading} />
       </div>
     </main>
