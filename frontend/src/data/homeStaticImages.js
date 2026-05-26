@@ -6,11 +6,6 @@
 /** @type {{ url: string, bgPos: string, alt: string }[]} */
 export const HOME_HERO_STATIC_SLIDES = [
   {
-    url: '/images/hero/dbu-graduation-caps.png',
-    bgPos: 'center 35%',
-    alt: 'Don Bosco University graduates celebrating — caps in the air',
-  },
-  {
     url: 'https://upload.wikimedia.org/wikipedia/commons/8/8f/ZCAS-U_Graduation.jpg',
     bgPos: 'center center',
     alt: 'University graduation — graduates and families together',
@@ -43,7 +38,7 @@ const IMAGE_URL_RE = /\.(jpe?g|png|gif|webp|avif|svg)(\?|#|$)/i
 
 /** Block buildings, low-res banners, historical oratory, and non-group shots. */
 const BLOCKED_IMAGE_RE =
-  /Reka-|Oratory-in-192|Oratory-192|Giovanni_Bosco-Giovanni_Battista|Parish_Church|Youth_Centre|Colegio_Salesianos|Shrine_at_Matunga|Main_building|Building_of_Don|cabeceraInterior|youth_focus\.jpg|education\.jpg|donboscosouthasia|Mabalact|High_School|Matunga_Mumbai|Lasallian|San_Lorenzo_John_Bosco_Parish/i
+  /Reka-|Oratory-in-192|Oratory-192|Giovanni_Bosco-Giovanni_Battista|Parish_Church|Youth_Centre|Colegio_Salesianos|Shrine_at_Matunga|Main_building|Building_of_Don|cabeceraInterior|youth_focus\.jpg|education\.jpg|donboscosouthasia|Mabalact|High_School|Matunga_Mumbai|Lasallian|San_Lorenzo_John_Bosco_Parish|dbu-graduation|Academic.?Block.?II|don.?bosco.?university.*graduat/i
 
 export function isBlockedHomeImage(url) {
   if (!url || typeof url !== 'string') return true
