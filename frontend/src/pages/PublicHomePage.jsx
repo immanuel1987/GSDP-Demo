@@ -277,8 +277,13 @@ function HpNavMenu() {
     leaveT.current = window.setTimeout(() => setHover(null), 180)
   }
   const toggle = (key) => setPinned((p) => (p === key ? null : key))
-  const go = (id) => {
+  const go = (item) => {
     closeAll()
+    const id = typeof item === 'string' ? item : item.id
+    if (typeof item === 'object' && item.scrollOnly) {
+      scrollToSection(id)
+      return
+    }
     const next = HOME_SECTION_TO_DASHBOARD[id]
     if (next) navigateLoginNext(navigate, next)
     else scrollToSection(id)
@@ -318,23 +323,38 @@ function HpNavMenu() {
         {label}
         <span className={`hp-menu-chev${show(key) ? ' open' : ''}`}>▾</span>
       </button>
-      <div className={`hp-nav-dd-wrap${show(key) ? ' is-open' : ''}`}>
+      <div
+        className={`hp-nav-dd-wrap${show(key) ? ' is-open' : ''}${key === 'about' ? ' hp-nav-dd-wrap--about' : ''}`}
+      >
         <div className="hp-nav-dd-panel" role="menu">
           {sections.map((block, bi) => (
-            <div key={block.title ?? `block-${bi}`}>
-              {block.title && <div className="hp-nav-dd-h" role="presentation">{block.title}</div>}
+            <div
+              key={block.title ?? `block-${bi}`}
+              className={`hp-nav-dd-block${block.align === 'center' ? ' hp-nav-dd-block--center' : ''}`}
+            >
+              {block.title ? (
+                <div className="hp-nav-dd-h" role="presentation">
+                  {block.title}
+                </div>
+              ) : null}
               {block.items.map((item) =>
                 item.href ? (
                   <a
                     key={item.href}
                     href={item.href}
-                    className="hp-nav-dd-item"
+                    className="hp-nav-dd-item hp-nav-dd-item--external"
                     target="_blank"
                     rel="noopener noreferrer"
                     role="menuitem"
                     onClick={closeAll}
                   >
-                    {item.label}
+                    <span className="hp-nav-dd-item-label">
+                      {item.label}
+                      {item.badge ? <span className="hp-nav-dd-badge">{item.badge}</span> : null}
+                    </span>
+                    <span className="hp-nav-dd-ext" aria-hidden>
+                      ↗
+                    </span>
                   </a>
                 ) : (
                   <button
@@ -342,13 +362,13 @@ function HpNavMenu() {
                     type="button"
                     role="menuitem"
                     className="hp-nav-dd-item"
-                    onClick={() => go(item.id)}
+                    onClick={() => go(item)}
                   >
                     {item.label}
                   </button>
                 ),
               )}
-              {bi < sections.length - 1 && <div className="hp-nav-dd-sep" role="separator" />}
+              {bi < sections.length - 1 ? <div className="hp-nav-dd-sep" role="separator" /> : null}
             </div>
           ))}
         </div>
@@ -401,20 +421,24 @@ function HpNavMenu() {
       {dd('about', 'About', [
         {
           title: 'On this page',
+          align: 'left',
           items: [
-            { label: 'About the platform', id: 'hp-foot-about' },
-            { label: 'South Asia pilot', id: 'hp-foot-southasia' },
+            { label: 'About the Platform', id: 'hp-foot-about', scrollOnly: true },
+            { label: 'South Asia pilot', id: 'hp-foot-southasia', scrollOnly: true },
           ],
         },
         {
           title: 'Official websites',
+          align: 'center',
           items: publicDiscoverLinks.map((l) => ({
-            label: l.badge ? `${l.label} · ${l.badge}` : l.label,
+            label: l.label,
             href: l.href,
+            badge: l.badge,
           })),
         },
         {
           title: 'Congregation',
+          align: 'center',
           items: [
             { label: 'Salesians of Don Bosco', href: 'https://www.sdb.org' },
             { label: 'Don Bosco South Asia', href: 'https://www.donboscosouthasia.org' },
