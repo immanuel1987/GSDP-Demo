@@ -39,7 +39,7 @@ from fastapi import FastAPI
 # CONFIGURATION
 # ============================================================
 ENDPOINT_NAME = os.environ.get("VECTOR_SEARCH_ENDPOINT", "salesianonline_vs_endpoint")
-INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "testing.gold.vector_content_index")
+INDEX_NAME = os.environ.get("VECTOR_SEARCH_INDEX", "testing.gold.vector_content_index_test")
 LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "databricks-meta-llama-3-3-70b-instruct")
 
 # Minimum similarity score threshold (0 to 1).
