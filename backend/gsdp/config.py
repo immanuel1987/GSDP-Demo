@@ -15,6 +15,6 @@ TABLES = {
     "dim_entities": "gsdp_poc.gold.dim_entities",
 }
 
-APP_TITLE = "GSDP - Semantic Search"
+APP_TITLE = "Global Salesian Digital Platform"
 APP_ICON = "\U0001f4da"
 MAX_SEARCH_RESULTS = 20

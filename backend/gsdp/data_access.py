@@ -1,11 +1,13 @@
 """GSDP Data Access Layer."""
 
-# Load .env for local development
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+# Load .env for local development only (not on Databricks Apps where OAuth is auto-configured)
+import os as _os
+if not _os.environ.get("DATABRICKS_CLIENT_ID"):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
 
 import os
 import pandas as pd
@@ -16,10 +18,11 @@ from config import TABLES
 
 def _get_workspace_client():
     """Works both on Databricks Apps and locally."""
-    db_host = os.getenv("DATABRICKS_HOST")
-    db_token = os.getenv("DATABRICKS_TOKEN")
-    if db_host and db_token:
-        return WorkspaceClient(host=db_host, token=db_token)
+    if not os.getenv("DATABRICKS_CLIENT_ID"):
+        db_host = os.getenv("DATABRICKS_HOST")
+        db_token = os.getenv("DATABRICKS_TOKEN")
+        if db_host and db_token:
+            return WorkspaceClient(host=db_host, token=db_token)
     return WorkspaceClient()
 
 

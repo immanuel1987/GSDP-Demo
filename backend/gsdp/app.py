@@ -1,11 +1,13 @@
 """GSDP - Semantic Search Application V2 (Hybrid Retrieval + Diagnostics)"""
 
-# Load .env for local development (no-op on Databricks Apps)
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+# Load .env for local development only (not on Databricks Apps where OAuth is auto-configured)
+import os as _os
+if not _os.environ.get("DATABRICKS_CLIENT_ID"):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
 
 import streamlit as st
 import base64
@@ -100,10 +102,11 @@ VOLUME_PATH = "/Volumes/gsdp_poc/raw/docs"
 def get_ws_client():
     """Get WorkspaceClient - works both on Databricks Apps and locally."""
     import os
-    host = os.environ.get("DATABRICKS_HOST")
-    token = os.environ.get("DATABRICKS_TOKEN")
-    if host and token:
-        return WorkspaceClient(host=host, token=token)
+    if not os.environ.get("DATABRICKS_CLIENT_ID"):
+        host = os.environ.get("DATABRICKS_HOST")
+        token = os.environ.get("DATABRICKS_TOKEN")
+        if host and token:
+            return WorkspaceClient(host=host, token=token)
     return WorkspaceClient()
 
 
@@ -243,6 +246,28 @@ if active_query:
     answer = result.get("answer", "")
     if answer:
         st.info(answer)
+        # PDF download links for source documents cited in the answer
+        seen_files = set()
+        source_pdfs = []
+        for src in sources[:5]:
+            fn = src.get("file_name", "")
+            if fn and fn not in seen_files:
+                seen_files.add(fn)
+                source_pdfs.append(fn)
+        if source_pdfs:
+            st.markdown("**📎 Source Documents:**")
+            cols = st.columns(min(len(source_pdfs), 3))
+            for idx, fn in enumerate(source_pdfs):
+                title, _ = format_title(fn)
+                pdf_bytes = get_pdf_bytes(fn)
+                if pdf_bytes:
+                    cols[idx % 3].download_button(
+                        f"📄 {title}",
+                        data=pdf_bytes,
+                        file_name=fn,
+                        mime="application/pdf",
+                        key=f"ans_pdf_{idx}",
+                    )
 
     sort_by = st.radio("Sort", ["Relevance", "Date \u2193", "Date \u2191"],
                        horizontal=True, label_visibility="collapsed")
@@ -263,10 +288,6 @@ if active_query:
 
         snippet = get_meaningful_snippet(content_text, active_query)
 
-        kw_score = float(s.get("keyword_score", 0))
-        vs_score = float(s.get("vector_score", 0))
-        hybrid_score = float(s.get("hybrid_score", 0))
-        rerank_score = s.get("rerank_score")
         final_score = float(s.get("final_score", 0))
 
         path_parts = [p for p in [f"\u00a7{section}" if section else "", doc_type, doc_date] if p]
@@ -280,24 +301,12 @@ if active_query:
             meta_parts.append(f"\U0001f4cd {location}")
         meta_str = "  \u2022  ".join(meta_parts)
 
-        score_html = ""
-        if kw_score > 0:
-            w_kw = int(kw_score * 60)
-            score_html += f'<span class="score-bar" style="background:#fbbc04;width:{w_kw}px"></span><small style="color:#666">KW:{kw_score:.0%}</small> '
-        if vs_score > 0:
-            w_vs = int(vs_score * 60)
-            score_html += f'<span class="score-bar" style="background:#4285f4;width:{w_vs}px"></span><small style="color:#666">VS:{vs_score:.0%}</small> '
-        if rerank_score is not None:
-            w_rr = int(rerank_score * 60)
-            score_html += f'<span class="score-bar" style="background:#34a853;width:{w_rr}px"></span><small style="color:#666">RR:{rerank_score:.0%}</small>'
-
         card_class = "result-even" if i % 2 == 0 else "result-odd"
 
         st.markdown(
             f'<div class="{card_class}">'
             f'<div class="result-title">{title_text}</div>'
             f'<div class="result-meta">{meta_str}</div>'
-            f'<div style="margin:4px 0">{score_html}</div>'
             f'<div class="result-snippet">{snippet}</div>'
             f'</div>',
             unsafe_allow_html=True,

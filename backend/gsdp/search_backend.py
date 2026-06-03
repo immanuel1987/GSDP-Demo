@@ -1,9 +1,11 @@
-# Load .env for local development
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
+# Load .env for local development only (not on Databricks Apps where OAuth is auto-configured)
+import os as _os
+if not _os.environ.get("DATABRICKS_CLIENT_ID"):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
 
 """GSDP Hybrid Search Backend - V2
 
@@ -60,14 +62,15 @@ def _get_client():
     global _client
     if _client is None:
         import os
-        host = os.environ.get("DATABRICKS_HOST")
-        token = os.environ.get("DATABRICKS_TOKEN")
-        if host and token:
-            # Local dev: explicit credentials
-            _client = WorkspaceClient(host=host, token=token)
-        else:
-            # Databricks Apps: auto-credentials via service principal
-            _client = WorkspaceClient()
+        # On Databricks Apps, OAuth is auto-configured via CLIENT_ID/SECRET
+        # Only use explicit PAT when OAuth is NOT present (local dev)
+        if not os.environ.get("DATABRICKS_CLIENT_ID"):
+            host = os.environ.get("DATABRICKS_HOST")
+            token = os.environ.get("DATABRICKS_TOKEN")
+            if host and token:
+                _client = WorkspaceClient(host=host, token=token)
+                return _client
+        _client = WorkspaceClient()
     return _client
 
 
@@ -196,7 +199,7 @@ def _keyword_search(query: str, top_k: int = 50) -> list:
              if len(w.strip()) > 2 and w.strip().lower() not in stop_words]
     
     if not terms:
-        return []
+        return [], 0
     
     # Build WHERE clause with relevance scoring
     like_conditions = " OR ".join(
