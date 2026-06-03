@@ -1,0 +1,6 @@
+env/
+gsdp/env/
+__pycache__/
+*.pyc
+.git/
+.env

@@ -9,23 +9,8 @@ COPY . .
 
 RUN pip install --upgrade pip
 
-RUN pip install \
-fastapi==0.115.0 \
-uvicorn==0.30.0 \
-gradio==4.31.4 \
-huggingface_hub==0.23.5 \
-numpy==1.26.4 \
-pandas==2.2.2 \
-MarkupSafe==2.1.5 \
-jinja2==3.1.4 \
-openai \
-sqlalchemy \
-psycopg2-binary \
-python-dotenv \
-requests \
-databricks-vectorsearch \
-bcrypt==5.0.0 \
-databricks-sql-connector
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 2005
 

@@ -1,0 +1,9 @@
+command:
+  - streamlit
+  - run
+  - app.py
+  - --server.port
+  - "8000"
+env:
+  - name: DATABRICKS_SQL_WAREHOUSE_ID
+    value: "c01af5f8d785be11"

@@ -33,9 +33,27 @@ services:
     networks:
       - n8n-docker_web
 
+  gsdp:
+    build: ./gsdp
+    container_name: gsdp_streamlit
+    volumes:
+      - ./gsdp:/app
+    env_file:
+      - ./gsdp/.env
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    command: >
+      streamlit run app.py
+      --server.port 8000
+      --server.address 0.0.0.0
+      --server.headless true
+      --browser.gatherUsageStats false
+    ports:
+      - "8000:8000"
+
 networks:
   n8n-docker_web:
     name: n8n-docker_web
     # Set to true on the server where Traefik/n8n already created this network.
     external: true
-
