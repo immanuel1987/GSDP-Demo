@@ -245,7 +245,9 @@ if active_query:
 
     answer = result.get("answer", "")
     if answer:
-        st.info(answer)
+        with st.container():
+            st.markdown(answer)
+            st.markdown("---")
         # PDF download links for source documents cited in the answer
         seen_files = set()
         source_pdfs = []

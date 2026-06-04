@@ -437,31 +437,62 @@ RELEVANCE SCORE (0-100):"""
 # ============================================================
 
 def _generate_answer(query: str, contexts: list) -> str:
-    """Generate answer using Foundation Model with context."""
+    """Generate answer using Foundation Model with context.
+    
+    Deduplicates by document, presents clean text without numbering,
+    and instructs the model to produce natural, well-formatted responses.
+    """
     w = _get_client()
     
-    # Build context from top results
-    context_parts = []
-    for i, ctx in enumerate(contexts[:7]):
-        chunk = (ctx.get("chunk_text") or "")[:1000]
+    # Deduplicate chunks by document - group and merge text
+    doc_contexts = {}
+    for ctx in contexts[:10]:
+        chunk = (ctx.get("chunk_text") or "")[:1200]
         if not chunk:
             continue
-        source = ctx.get("file_name", "Unknown")
-        context_parts.append(f"[Source {i+1}: {source}]\n{chunk}")
+        fn = ctx.get("file_name", "Unknown")
+        if fn not in doc_contexts:
+            # Format clean title from filename
+            title = fn.replace(".pdf", "").replace("Bosco-", "")
+            import re as _re
+            m = _re.match(r"(\d+\.\d+\.\d+)-(.*)", title)
+            if m:
+                title = m.group(2).replace("-", " ").title()
+            doc_contexts[fn] = {"title": title, "chunks": []}
+        doc_contexts[fn]["chunks"].append(chunk)
     
-    context_text = "\n\n---\n\n".join(context_parts)
+    # Build context WITHOUT numbering - just title + text
+    context_parts = []
+    for fn, doc in list(doc_contexts.items())[:5]:
+        merged_text = "\n".join(doc["chunks"][:3])[:2000]
+        context_parts.append(f"--- {doc['title']} ---\n{merged_text}")
     
-    system_prompt = """You are a scholarly assistant specializing in Don Bosco and Salesian history.
-Answer questions using ONLY the provided context documents.
-Be precise and cite source documents when possible.
-If the context doesn't contain enough information, say so clearly."""
+    context_text = "\n\n".join(context_parts)
+    
+    system_prompt = """You are a knowledgeable research assistant specializing in Don Bosco and Salesian history.
 
-    user_prompt = f"""Context Documents:
+RESPONSE RULES:
+- Write a clear, well-structured answer using markdown formatting
+- Use **bold** for key names, dates, and important terms
+- Use bullet points or numbered lists when listing multiple items
+- Keep the response concise (3-5 paragraphs maximum)
+- NEVER reference documents by number (no "Document 1", "Source 2", etc.)
+- NEVER use parenthetical citations like (Source 1) or [Document 2]
+- Instead, naturally weave document titles into your answer when relevant, e.g. "According to the Memoirs of the Oratory..." or "In his letters to..."
+- If quoting directly, use quotation marks
+- Answer ONLY from the provided context — never invent facts
+- If context is insufficient, state that clearly
+- Use a professional, informative tone
+- End complex answers with a brief one-line summary in bold"""
+
+    user_prompt = f"""Reference Material:
 {context_text}
+
+---
 
 Question: {query}
 
-Provide a clear, well-structured answer based on the context above."""
+Write a comprehensive, well-formatted answer."""
 
     try:
         response = w.serving_endpoints.query(
@@ -470,7 +501,7 @@ Provide a clear, well-structured answer based on the context above."""
                 ChatMessage(role=ChatMessageRole.SYSTEM, content=system_prompt),
                 ChatMessage(role=ChatMessageRole.USER, content=user_prompt),
             ],
-            max_tokens=800,
+            max_tokens=1000,
             temperature=0.1,
         )
         return response.choices[0].message.content.strip()
