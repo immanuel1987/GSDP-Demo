@@ -272,15 +272,127 @@ def _detect_listing_type(query: str):
     return None
 
 
-def do_listing_search(doc_type) -> dict:
+def _detect_recipient_filter(user_query: str):
+    """Detect if the listing query has a recipient category qualifier.
+    
+    Returns dict with 'category', 'label', 'patterns', 'exclude_patterns' or None.
+    """
+    _RECIPIENT_CATEGORIES = {
+        "religious": {
+            "label": "Religious Communities & Clergy",
+            "patterns": [
+                "Fr ", "Fr.", "Sister ", "Sr ", "Mother ", "Cleric ", "Salesian ",
+                "Archbishop ", "Bishop ", "Pope ", "Cardinal ", "Canon ",
+                "Right Rev", "Abb\u00e9", "Parish Priest",
+                "Secretary of the Congregation", "Prefect of the Congregation",
+                "SDB", "FMA", "Salesians", "the boys at",
+            ],
+            "exclude_patterns": [],
+        },
+        "salesian": {
+            "label": "Salesians (SDB & FMA members)",
+            "patterns": [
+                "Fr ", "Fr.", "Sister ", "Sr ", "Mother ", "Cleric ", "Salesian ",
+                "SDB", "FMA", "the boys at", "the Salesians",
+            ],
+            "exclude_patterns": [
+                "Archbishop ", "Bishop ", "Pope ", "Cardinal ", "Canon ",
+                "Right Rev", "Abb\u00e9", "Parish Priest", "Secretary of State",
+                "Prefect of the Congregation", "Secretary of the Congregation",
+                "President of the Oblate",
+            ],
+        },
+        "political": {
+            "label": "Political & Government Officials",
+            "patterns": [
+                "King ", "Minister ", "Prefect of the Turin", "Prefect of Turin",
+                "President of the Council", "Mayor ", "Superintendent",
+                "Senator ", "Vicar of the city", "Director General",
+            ],
+            "exclude_patterns": [],
+        },
+        "private": {
+            "label": "Private Individuals & Benefactors",
+            "patterns": [
+                "Count ", "Countess ", "Marquis ", "Marchioness ", "Baron ",
+                "Baroness ", "Mrs ", "Miss ", "Chev.",
+            ],
+            "exclude_patterns": [],
+        },
+        "hierarchy": {
+            "label": "Church Hierarchy (non-Salesian)",
+            "patterns": [
+                "Pope ", "Cardinal ", "Archbishop ", "Bishop ", "Canon ",
+                "Right Rev", "Secretary of State", "Prefect of the Congregation",
+                "Secretary of the Congregation",
+            ],
+            "exclude_patterns": [],
+        },
+    }
+    _RECIPIENT_KEYWORDS = {
+        "religious communit": "religious",
+        "religious": "religious",
+        "clergy": "religious",
+        "salesian": "salesian",
+        "sdb": "salesian",
+        "fma": "salesian",
+        "daughters of mary": "salesian",
+        "political": "political",
+        "government": "political",
+        "official": "political",
+        "minister": "political",
+        "king": "political",
+        "private": "private",
+        "benefactor": "private",
+        "donor": "private",
+        "nobility": "private",
+        "count": "private",
+        "pope": "hierarchy",
+        "cardinal": "hierarchy",
+        "bishop": "hierarchy",
+        "archbishop": "hierarchy",
+        "vatican": "hierarchy",
+        "holy see": "hierarchy",
+        "church hierarchy": "hierarchy",
+    }
+    q = user_query.lower()
+    for keyword, category in sorted(_RECIPIENT_KEYWORDS.items(), key=lambda x: -len(x[0])):
+        if keyword in q:
+            cat_def = _RECIPIENT_CATEGORIES[category]
+            return {
+                "category": category,
+                "label": cat_def["label"],
+                "patterns": cat_def["patterns"],
+                "exclude_patterns": cat_def.get("exclude_patterns", []),
+            }
+    # Check for specific person name in "to <Person>" pattern
+    person_match = re.search(r'\bto\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})', user_query)
+    if person_match:
+        person_name = person_match.group(1)
+        if person_name.lower() not in ("don bosco", "john bosco"):
+            return {
+                "category": "person",
+                "label": f"Letters to {person_name}",
+                "person_name": person_name,
+                "patterns": [],
+                "exclude_patterns": [],
+            }
+    return None
+
+
+def do_listing_search(doc_type, user_query: str = "") -> dict:
     """Directly query bronze_sub_documents for a full catalog listing.
     
     Bypasses RAG entirely — uses SDK statement execution to get all items.
+    Applies recipient filtering when query contains qualifiers like 'to Salesians'.
     """
     from databricks.sdk.service.sql import StatementState
     import os
 
     w = get_ws_client()
+
+    # Detect recipient filter from the user's query
+    recipient_filter = _detect_recipient_filter(user_query) if user_query else None
 
     # Handle both single type (str) and multiple types (list)
     if isinstance(doc_type, list):
@@ -320,16 +432,51 @@ def do_listing_search(doc_type) -> dict:
     if not rows:
         return None
 
+    # --- Apply recipient filter if detected ---
+    if recipient_filter:
+        filtered_rows = []
+        patterns = recipient_filter.get("patterns", [])
+        exclude = recipient_filter.get("exclude_patterns", [])
+        person_name = recipient_filter.get("person_name", "")
+        for r in rows:
+            recip = r.get("recipient") or ""
+            if not recip:
+                continue
+            if person_name:
+                if person_name.lower() in recip.lower():
+                    filtered_rows.append(r)
+            elif patterns:
+                matches = any(p.lower() in recip.lower() or recip.startswith(p) for p in patterns)
+                excluded = any(p.lower() in recip.lower() or recip.startswith(p) for p in exclude) if exclude else False
+                if matches and not excluded:
+                    filtered_rows.append(r)
+        rows = filtered_rows
+
+    if not rows:
+        cat_label = recipient_filter.get('label', 'the specified recipients') if recipient_filter else 'any documents'
+        return {
+            "answer": f"## No {type_label} Found\n\nNo letters matching **{cat_label}** were found in the corpus.",
+            "sources": [],
+            "diagnostics": {"search_mode": "listing_query", "doc_type": doc_type,
+                "recipient_filter": recipient_filter.get("category") if recipient_filter else None,
+                "total_items": 0},
+        }
+
     # Build structured markdown answer
     total = len(rows)
-    # type_label already defined above for both single and multi-type
     by_pdf = {}
     for r in rows:
         fn = r.get("file_name", "Unknown")
         by_pdf.setdefault(fn, []).append(r)
 
+    # Include filter context in heading
+    if recipient_filter:
+        heading = f"{type_label} to {recipient_filter['label']}"
+    else:
+        heading = f"All {type_label} in the GSDP Corpus"
+
     lines = [
-        f"## All {type_label} in the GSDP Corpus ({total} total)\n",
+        f"## {heading} ({total} total)\n",
         f"Found **{total}** items across **{len(by_pdf)} source documents**.\n",
     ]
     for fn, items in sorted(by_pdf.items()):
@@ -375,7 +522,8 @@ def do_listing_search(doc_type) -> dict:
         "sources": sources,
         "diagnostics": {
             "search_mode": "listing_query",
-            "doc_type": r.get("sub_doc_type", doc_type if isinstance(doc_type, str) else ""),
+            "doc_type": doc_type if isinstance(doc_type, str) else str(doc_type),
+            "recipient_filter": recipient_filter.get("category") if recipient_filter else None,
             "total_items": total,
             "source_pdfs": len(by_pdf),
             "total_latency_ms": 0,
@@ -470,7 +618,7 @@ if active_query:
         # Check if this is a listing query (list all letters, show all chapters, etc.)
         _listing_type = _detect_listing_type(active_query)
         if _listing_type:
-            result = do_listing_search(_listing_type)
+            result = do_listing_search(_listing_type, user_query=active_query)
             if result is None:
                 # Fallback to RAG if listing query fails
                 result = do_search(active_query, MAX_SEARCH_RESULTS, active_rerank, active_expand)

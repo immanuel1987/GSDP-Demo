@@ -732,15 +732,146 @@ def _detect_listing_query(user_query: str):
     return None
 
 
+# --- Recipient Category Definitions ---
+# Used by the listing handler to filter letters by recipient type
+
+_RECIPIENT_CATEGORIES = {
+    "religious": {
+        "label": "Religious Communities & Clergy",
+        "description": "Letters to Salesians (SDB), Daughters of Mary Help of Christians (FMA), priests, sisters, clerics, bishops, and other religious",
+        "patterns": [
+            "Fr ", "Fr.", "Sister ", "Sr ", "Mother ", "Cleric ", "Salesian ",
+            "Archbishop ", "Bishop ", "Pope ", "Cardinal ", "Canon ",
+            "Right Rev", "Abbé", "Parish Priest",
+            "Secretary of the Congregation", "Prefect of the Congregation",
+            "SDB", "FMA", "Salesians", "the boys at",
+        ],
+    },
+    "salesian": {
+        "label": "Salesians (SDB & FMA members)",
+        "description": "Letters specifically to Salesian priests, brothers, sisters, and clerics",
+        "patterns": [
+            "Fr ", "Fr.", "Sister ", "Sr ", "Mother ", "Cleric ", "Salesian ",
+            "SDB", "FMA", "the boys at", "the Salesians",
+        ],
+        # Exclude non-Salesian clergy (bishops, popes, external priests)
+        "exclude_patterns": [
+            "Archbishop ", "Bishop ", "Pope ", "Cardinal ", "Canon ",
+            "Right Rev", "Abbé", "Parish Priest", "Secretary of State",
+            "Prefect of the Congregation", "Secretary of the Congregation",
+            "President of the Oblate",
+        ],
+    },
+    "political": {
+        "label": "Political & Government Officials",
+        "description": "Letters to kings, ministers, prefects, mayors, and government officials",
+        "patterns": [
+            "King ", "Minister ", "Prefect of the Turin", "Prefect of Turin",
+            "President of the Council", "Mayor ", "Superintendent",
+            "Senator ", "Vicar of the city", "Director General",
+        ],
+    },
+    "private": {
+        "label": "Private Individuals & Benefactors",
+        "description": "Letters to counts, countesses, marquises, barons, and private donors",
+        "patterns": [
+            "Count ", "Countess ", "Marquis ", "Marchioness ", "Baron ",
+            "Baroness ", "Mrs ", "Miss ", "Chev.",
+        ],
+    },
+    "hierarchy": {
+        "label": "Church Hierarchy (non-Salesian)",
+        "description": "Letters to Popes, Cardinals, Archbishops, Bishops, and Vatican officials",
+        "patterns": [
+            "Pope ", "Cardinal ", "Archbishop ", "Bishop ", "Canon ",
+            "Right Rev", "Secretary of State", "Prefect of the Congregation",
+            "Secretary of the Congregation",
+        ],
+    },
+}
+
+# Query keywords → category mapping
+_RECIPIENT_KEYWORDS = {
+    "religious communit": "religious",
+    "religious": "religious",
+    "clergy": "religious",
+    "salesian": "salesian",
+    "sdb": "salesian",
+    "fma": "salesian",
+    "daughters of mary": "salesian",
+    "political": "political",
+    "government": "political",
+    "official": "political",
+    "minister": "political",
+    "king": "political",
+    "private": "private",
+    "benefactor": "private",
+    "donor": "private",
+    "nobility": "private",
+    "count": "private",
+    "pope": "hierarchy",
+    "cardinal": "hierarchy",
+    "bishop": "hierarchy",
+    "archbishop": "hierarchy",
+    "vatican": "hierarchy",
+    "holy see": "hierarchy",
+    "church hierarchy": "hierarchy",
+}
+
+
+def _detect_recipient_filter(user_query: str):
+    """Detect if the listing query has a recipient qualifier.
+    
+    Returns:
+        dict with 'category', 'label', 'patterns', optional 'exclude_patterns'
+        or None if no filter detected.
+    """
+    q = user_query.lower()
+    
+    # Check for category keywords (longest match first)
+    for keyword, category in sorted(_RECIPIENT_KEYWORDS.items(), key=lambda x: -len(x[0])):
+        if keyword in q:
+            cat_def = _RECIPIENT_CATEGORIES[category]
+            return {
+                "category": category,
+                "label": cat_def["label"],
+                "patterns": cat_def["patterns"],
+                "exclude_patterns": cat_def.get("exclude_patterns", []),
+            }
+    
+    # Check for specific person name in "to <Person>" pattern
+    person_match = re.search(r'\bto\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})', user_query)
+    if person_match:
+        person_name = person_match.group(1)
+        # Don't filter on generic terms like "Don Bosco" (the author)
+        if person_name.lower() not in ("don bosco", "john bosco"):
+            return {
+                "category": "person",
+                "label": f"Letters to {person_name}",
+                "person_name": person_name,
+                "patterns": [],
+                "exclude_patterns": [],
+            }
+    
+    return None
+
+
 def _handle_listing_query(user_query: str, doc_type) -> dict:
     """Handle listing queries by directly querying bronze_sub_documents.
     
     Accepts doc_type as str (single type) or list (multiple types from hierarchy).
+    Detects recipient qualifiers (e.g. 'to Salesians', 'to religious communities')
+    and applies filtering to only show matching letters.
+    
     Returns a complete catalog of items instead of RAG-style answer.
     """
     import sys
     t_start = time.time()
-    print(f"[LISTING] Detected listing query for type='{doc_type}', query='{user_query}'", file=sys.stderr)
+    
+    # Detect recipient filter from the query
+    recipient_filter = _detect_recipient_filter(user_query)
+    
+    print(f"[LISTING] type='{doc_type}', recipient_filter={recipient_filter.get('category') if recipient_filter else None}, query='{user_query}'", file=sys.stderr)
     
     # Handle both single type (str) and multiple types (list)
     if isinstance(doc_type, list):
@@ -768,9 +899,45 @@ def _handle_listing_query(user_query: str, doc_type) -> dict:
     if not rows:
         return None  # Fall through to normal RAG
 
+    # --- Apply recipient filter if detected ---
+    if recipient_filter:
+        filtered_rows = []
+        patterns = recipient_filter.get("patterns", [])
+        exclude = recipient_filter.get("exclude_patterns", [])
+        person_name = recipient_filter.get("person_name", "")
+        
+        for r in rows:
+            recip = r.get("recipient") or ""
+            if not recip:
+                continue  # Skip letters with no recipient when filtering
+            
+            if person_name:
+                # Direct person name match
+                if person_name.lower() in recip.lower():
+                    filtered_rows.append(r)
+            elif patterns:
+                # Category-based match: must match at least one pattern
+                matches = any(p.lower() in recip.lower() or recip.startswith(p) for p in patterns)
+                excluded = any(p.lower() in recip.lower() or recip.startswith(p) for p in exclude) if exclude else False
+                if matches and not excluded:
+                    filtered_rows.append(r)
+        
+        rows = filtered_rows
+        print(f"[LISTING] After recipient filter '{recipient_filter['category']}': {len(rows)} rows", file=sys.stderr)
+    
+    if not rows:
+        # No results after filtering — return informative message
+        cat_label = recipient_filter.get('label', 'the specified recipients') if recipient_filter else 'any documents'
+        return {
+            "answer": f"## No {type_label} Found\n\nNo letters matching **{cat_label}** were found in the corpus.\n\nTry a broader search or check the Knowledge Graph for recipient details.",
+            "sources": [],
+            "diagnostics": {"search_mode": "listing_query", "doc_type": doc_type,
+                "recipient_filter": recipient_filter, "total_items": 0,
+                "total_latency_ms": round((time.time() - t_start) * 1000)},
+        }
+
     # Build structured answer
     total = len(rows)
-    # type_label already set above
 
     # Group by source PDF
     by_pdf = {}
@@ -780,8 +947,13 @@ def _handle_listing_query(user_query: str, doc_type) -> dict:
             by_pdf[fn] = []
         by_pdf[fn].append(r)
 
-    # Build markdown answer
-    lines = [f"## All {type_label} in the GSDP Corpus ({total} total)\n"]
+    # Build markdown answer — include filter context in heading
+    if recipient_filter:
+        heading = f"{type_label} to {recipient_filter['label']}"
+    else:
+        heading = f"All {type_label} in the GSDP Corpus"
+    
+    lines = [f"## {heading} ({total} total)\n"]
     lines.append(f"Found **{total}** items across **{len(by_pdf)} source documents**.\n")
 
     for fn, items in sorted(by_pdf.items()):
@@ -832,6 +1004,8 @@ def _handle_listing_query(user_query: str, doc_type) -> dict:
         "diagnostics": {
             "search_mode": "listing_query",
             "doc_type": doc_type,
+            "recipient_filter": recipient_filter.get("category") if recipient_filter else None,
+            "recipient_label": recipient_filter.get("label") if recipient_filter else None,
             "total_items": total,
             "source_pdfs": len(by_pdf),
             "total_latency_ms": round((time.time() - t_start) * 1000),
