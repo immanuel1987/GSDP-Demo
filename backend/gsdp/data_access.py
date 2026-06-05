@@ -53,7 +53,7 @@ def run_query(query: str) -> pd.DataFrame:
         response = w.statement_execution.execute_statement(
             warehouse_id=warehouse_id,
             statement=query,
-            wait_timeout="60s",
+            wait_timeout="50s",
         )
 
         if response.status and response.status.state == StatementState.SUCCEEDED:
